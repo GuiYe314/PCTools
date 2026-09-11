@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+.vs/
+.package-cache/
+.tmp/
+.dotnet-home/
+.nuget-packages/
+*.user
+*.suo
+*.log
+
+# 与主工具集无关的本机辅助项目和脚本
+XRExhibitNetProbe/
+desktop-ip-widget.ps1
+start-ip-widget.cmd

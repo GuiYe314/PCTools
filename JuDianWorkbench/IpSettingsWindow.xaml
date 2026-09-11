@@ -1,0 +1,26 @@
+<Window x:Class="JuDianWorkbench.IpSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="修改 IPv4 设置" Width="650" Height="525" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" Background="{StaticResource AppBackground}"
+        FontFamily="Microsoft YaHei UI" Foreground="{StaticResource TextBrush}">
+    <Border Style="{StaticResource PanelCard}" Margin="20">
+        <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <StackPanel><TextBlock Text="修改 IPv4 设置" FontSize="20" FontWeight="SemiBold"/><TextBlock Text="保存后还会再次显示变更内容，不会直接修改系统。" Foreground="{StaticResource MutedBrush}" Margin="0,6,0,14"/></StackPanel>
+            <StackPanel Grid.Row="1">
+                <TextBlock Text="网卡" Foreground="{StaticResource MutedBrush}"/><ComboBox x:Name="AdapterComboBox" DisplayMemberPath="DisplayName" SelectionChanged="Adapter_SelectionChanged" Margin="0,5,0,12"/>
+                <TextBlock Text="IP 获取方式" Foreground="{StaticResource MutedBrush}"/><ComboBox x:Name="ModeComboBox" SelectionChanged="Mode_SelectionChanged" Margin="0,5,0,12"><ComboBoxItem Content="自动获取（DHCP）" Tag="Dhcp"/><ComboBoxItem Content="手动设置静态 IP" Tag="Static"/></ComboBox>
+                <Grid x:Name="StaticPanel" IsEnabled="False"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <StackPanel><TextBlock Text="IPv4 地址" Foreground="{StaticResource MutedBrush}"/><TextBox x:Name="IpAddressTextBox" Margin="0,5,0,11"/></StackPanel>
+                    <StackPanel Grid.Column="2"><TextBlock Text="子网掩码" Foreground="{StaticResource MutedBrush}"/><TextBox x:Name="SubnetMaskTextBox" Margin="0,5,0,11"/></StackPanel>
+                    <StackPanel Grid.Row="1"><TextBlock Text="默认网关" Foreground="{StaticResource MutedBrush}"/><TextBox x:Name="GatewayTextBox" Margin="0,5,0,11"/></StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="2"><TextBlock Text="首选 DNS" Foreground="{StaticResource MutedBrush}"/><TextBox x:Name="PrimaryDnsTextBox" Margin="0,5,0,11"/></StackPanel>
+                    <StackPanel Grid.Row="2"><TextBlock Text="备用 DNS（可选）" Foreground="{StaticResource MutedBrush}"/><TextBox x:Name="SecondaryDnsTextBox" Margin="0,5,0,0"/></StackPanel>
+                </Grid>
+                <TextBlock Text="提示：错误的静态 IP、网关或 DNS 会导致断网，可重新切换回 DHCP 恢复。" Foreground="#B56A25" Margin="0,14,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="取消" IsCancel="True" Margin="0,0,8,0"/><Button Content="下一步" Style="{StaticResource PrimaryButton}" Click="Next_Click"/></StackPanel>
+        </Grid>
+    </Border>
+</Window>
