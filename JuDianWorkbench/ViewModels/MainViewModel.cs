@@ -33,6 +33,7 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<FolderRecord> Folders { get; } = [];
     public ObservableCollection<FolderRecord> FavoriteFolders { get; } = [];
     public ObservableCollection<EventRecord> Events { get; } = [];
+    public ObservableCollection<EventRecord> DashboardTasks { get; } = [];
     public ObservableCollection<EventRecord> ArchivedTasks { get; } = [];
     public IReadOnlyList<string> TaskTagFilters { get; private set; } = ["全部标签"];
     public ObservableCollection<FolderTreeNode> FolderTree { get; } = [];
@@ -211,6 +212,8 @@ public sealed class MainViewModel : ObservableObject
     public int FavoriteFolderCount => _data.Folders.Count(x => x.IsFavorite);
     public int InvalidFolderCount => _data.Folders.Count(x => !x.Exists);
     public int EventCount => _data.Events.Count(x => !x.IsArchived);
+    public int OpenTaskCount => _data.Events.Count(x => !x.IsArchived && x.Status == "未完成");
+    public int OverdueTaskCount => _data.Events.Count(x => !x.IsArchived && x.IsOverdue);
     public int ArchivedTaskCount => _data.Events.Count(x => x.IsArchived);
     public AppSettings Settings => _data.Settings;
 
@@ -242,7 +245,7 @@ public sealed class MainViewModel : ObservableObject
         foreach (var item in _data.Events.Where(x => x.FolderId == folder.Id)) item.FolderId = null;
         AppLogger.Info($"移除文件夹管理记录：{folder.Name}");
         SaveAndRefresh();
-        SelectedFolder = null;
+        SelectedFolder = Folders.FirstOrDefault();
     }
 
     public void SetFolderFavorite(FolderRecord folder, bool isFavorite)
@@ -328,7 +331,7 @@ public sealed class MainViewModel : ObservableObject
     {
         _data.Events.RemoveAll(x => x.Id == record.Id);
         SaveAndRefresh(rebuildTaskTags: true);
-        SelectedEvent = null;
+        SelectedEvent = Events.FirstOrDefault();
     }
 
     public void ArchiveTask(EventRecord record)
@@ -337,7 +340,7 @@ public sealed class MainViewModel : ObservableObject
         record.ArchivedAt = DateTime.Now;
         AppLogger.Info($"归档任务：{record.Title}");
         SaveAndRefresh(rebuildTaskTags: true);
-        SelectedEvent = null;
+        SelectedEvent = Events.FirstOrDefault();
     }
 
     public void RestoreTask(EventRecord record)
@@ -370,7 +373,7 @@ public sealed class MainViewModel : ObservableObject
         _store.Save(_data);
         RebuildCommandCategories();
         RefreshCommands();
-        SelectedCommand = null;
+        SelectedCommand = Commands.FirstOrDefault();
         RaisePropertyChanged(nameof(CommandCount));
         AppLogger.Info($"删除快捷命令：{record.Name}");
     }
@@ -547,11 +550,12 @@ public sealed class MainViewModel : ObservableObject
         FavoriteFolders.Clear();
         foreach (var item in _data.Folders.Where(x => x.IsFavorite).OrderBy(x => x.Name)) FavoriteFolders.Add(item);
         RaiseSummaryProperties();
-        if (selectedId is not null) _selectedFolder = Folders.FirstOrDefault(x => x.Id == selectedId);
+        SelectedFolder = Folders.FirstOrDefault(x => x.Id == selectedId) ?? Folders.FirstOrDefault();
     }
 
     private void RefreshEvents()
     {
+        var selectedId = SelectedEvent?.Id;
         var query = _data.Events.Where(x => !x.IsArchived);
         if (!string.IsNullOrWhiteSpace(EventSearch))
             query = query.Where(x => $"{x.Title} {x.Content} {x.Type} {x.Status} {x.Tags}".Contains(EventSearch, StringComparison.OrdinalIgnoreCase));
@@ -569,10 +573,15 @@ public sealed class MainViewModel : ObservableObject
         }
         Events.Clear();
         foreach (var item in query.OrderByDescending(x => x.OccurredAt)) Events.Add(item);
+        DashboardTasks.Clear();
+        foreach (var item in _data.Events.Where(x => !x.IsArchived && x.Status == "未完成").OrderBy(x => x.DueAt).Take(6)) DashboardTasks.Add(item);
         ArchivedTasks.Clear();
         foreach (var item in _data.Events.Where(x => x.IsArchived).OrderByDescending(x => x.ArchivedAt)) ArchivedTasks.Add(item);
         RaisePropertyChanged(nameof(EventCount));
+        RaisePropertyChanged(nameof(OpenTaskCount));
+        RaisePropertyChanged(nameof(OverdueTaskCount));
         RaisePropertyChanged(nameof(ArchivedTaskCount));
+        SelectedEvent = Events.FirstOrDefault(x => x.Id == selectedId) ?? Events.FirstOrDefault();
     }
 
     private void RefreshFolderTree()

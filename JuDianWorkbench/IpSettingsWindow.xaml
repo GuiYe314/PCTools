@@ -20,7 +20,7 @@
                 </Grid>
                 <TextBlock Text="提示：错误的静态 IP、网关或 DNS 会导致断网，可重新切换回 DHCP 恢复。" Foreground="#B56A25" Margin="0,14,0,0" TextWrapping="Wrap"/>
             </StackPanel>
-            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="取消" IsCancel="True" Margin="0,0,8,0"/><Button Content="下一步" Style="{StaticResource PrimaryButton}" Click="Next_Click"/></StackPanel>
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="取消" IsCancel="True" Margin="0,0,8,0"/><Button Content="下一步" Style="{StaticResource PrimaryButton}" Click="Next_Click" IsDefault="True"/></StackPanel>
         </Grid>
     </Border>
 </Window>

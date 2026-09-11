@@ -58,15 +58,17 @@ public partial class MainWindow : Window
     private async void Navigation_Checked(object sender, RoutedEventArgs e)
     {
         if (!IsLoaded || sender is not RadioButton button) return;
-        DashboardPage.Visibility = button.Tag?.ToString() == "Dashboard" ? Visibility.Visible : Visibility.Collapsed;
-        FoldersPage.Visibility = button.Tag?.ToString() == "Folders" ? Visibility.Visible : Visibility.Collapsed;
-        EventsPage.Visibility = button.Tag?.ToString() == "Events" ? Visibility.Visible : Visibility.Collapsed;
-        CommandsPage.Visibility = button.Tag?.ToString() == "Commands" ? Visibility.Visible : Visibility.Collapsed;
-        GitHubPage.Visibility = button.Tag?.ToString() == "GitHub" ? Visibility.Visible : Visibility.Collapsed;
-        FileSharePage.Visibility = button.Tag?.ToString() == "FileShare" ? Visibility.Visible : Visibility.Collapsed;
-        SystemNetworkPage.Visibility = button.Tag?.ToString() == "SystemNetwork" ? Visibility.Visible : Visibility.Collapsed;
-        SettingsPage.Visibility = button.Tag?.ToString() == "Settings" ? Visibility.Visible : Visibility.Collapsed;
-        GlobalSearchBox.Text = string.Empty;
+        var target = button.Tag?.ToString() ?? "Dashboard";
+        ShowPage(target);
+        UpdatePageChrome(target);
+        GlobalSearchBox.Text = target switch
+        {
+            "Folders" => ViewModel.FolderSearch,
+            "Events" => ViewModel.EventSearch,
+            "Commands" => ViewModel.CommandSearch,
+            "GitHub" => ViewModel.GitHubProjectSearch,
+            _ => string.Empty
+        };
         if (SystemNetworkPage.Visibility == Visibility.Visible && !_systemNetworkLoaded)
             await RefreshSystemNetworkAsync();
         if (GitHubPage.Visibility == Visibility.Visible && ViewModel.GitHubTrendCount == 0 && !_gitHubInitialCheckAttempted)
@@ -367,17 +369,87 @@ public partial class MainWindow : Window
 
     private void QuickEvent_Click(object sender, RoutedEventArgs e)
     {
-        EventsPage.Visibility = Visibility.Visible;
-        DashboardPage.Visibility = FoldersPage.Visibility = CommandsPage.Visibility = GitHubPage.Visibility = FileSharePage.Visibility = SystemNetworkPage.Visibility = SettingsPage.Visibility = Visibility.Collapsed;
         OpenNewTaskDialog();
     }
 
     private void NavigateToFeature_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { Tag: string target }) return;
-        var button = new[] { DashboardNavButton, FoldersNavButton, TasksNavButton, CommandNavButton, GitHubNavButton, FileShareNavButton, SystemNetworkNavButton }
+        NavigateToFeature(target);
+    }
+
+    private void NavigateToFeature(string target)
+    {
+        var button = new[] { DashboardNavButton, FoldersNavButton, TasksNavButton, CommandNavButton, GitHubNavButton, FileShareNavButton, SystemNetworkNavButton, SettingsNavButton }
             .FirstOrDefault(x => string.Equals(x.Tag?.ToString(), target, StringComparison.Ordinal));
-        if (button?.Visibility == Visibility.Visible) button.IsChecked = true;
+        if (button is null) return;
+        if (button.Visibility != Visibility.Visible)
+        {
+            ShowInfo("该功能已在设置的“功能管理”中隐藏。");
+            return;
+        }
+        button.IsChecked = true;
+    }
+
+    private void ShowPage(string target)
+    {
+        DashboardPage.Visibility = target == "Dashboard" ? Visibility.Visible : Visibility.Collapsed;
+        FoldersPage.Visibility = target == "Folders" ? Visibility.Visible : Visibility.Collapsed;
+        EventsPage.Visibility = target == "Events" ? Visibility.Visible : Visibility.Collapsed;
+        CommandsPage.Visibility = target == "Commands" ? Visibility.Visible : Visibility.Collapsed;
+        GitHubPage.Visibility = target == "GitHub" ? Visibility.Visible : Visibility.Collapsed;
+        FileSharePage.Visibility = target == "FileShare" ? Visibility.Visible : Visibility.Collapsed;
+        SystemNetworkPage.Visibility = target == "SystemNetwork" ? Visibility.Visible : Visibility.Collapsed;
+        SettingsPage.Visibility = target == "Settings" ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void UpdatePageChrome(string target)
+    {
+        var pageName = target switch
+        {
+            "Folders" => "文件夹管理",
+            "Events" => "任务管理",
+            "Commands" => "命令中心",
+            "GitHub" => "GitHub 热门",
+            "FileShare" => "文件共享",
+            "SystemNetwork" => "系统与网络",
+            "Settings" => "设置",
+            _ => "工作台"
+        };
+        CurrentPageTitleText.Text = $"当前位置 · {pageName}";
+        var placeholder = target switch
+        {
+            "Folders" => "搜索文件夹名称、路径、用途或标签…",
+            "Events" => "搜索任务标题、说明、状态或标签…",
+            "Commands" => "搜索命令名称、分类或执行内容…",
+            "GitHub" => "搜索仓库名称、说明或开发语言…",
+            _ => string.Empty
+        };
+        GlobalSearchContainer.Visibility = string.IsNullOrEmpty(placeholder) ? Visibility.Collapsed : Visibility.Visible;
+        SearchPlaceholderText.Text = placeholder;
+        GlobalSearchBox.ToolTip = string.IsNullOrEmpty(placeholder) ? null : $"{placeholder.TrimEnd('…')}（Ctrl+K）";
+    }
+
+    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.K && Keyboard.Modifiers == ModifierKeys.Control && GlobalSearchContainer.Visibility == Visibility.Visible)
+        {
+            GlobalSearchBox.Focus();
+            GlobalSearchBox.SelectAll();
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.Escape && GlobalSearchBox.IsKeyboardFocusWithin && !string.IsNullOrEmpty(GlobalSearchBox.Text))
+        {
+            GlobalSearchBox.Clear();
+            e.Handled = true;
+            return;
+        }
+        if (e.Key != Key.N || Keyboard.Modifiers != ModifierKeys.Control) return;
+        if (FoldersPage.Visibility == Visibility.Visible) NewFolder_Click(this, e);
+        else if (CommandsPage.Visibility == Visibility.Visible) NewCommand_Click(this, e);
+        else OpenNewTaskDialog();
+        e.Handled = true;
     }
 
     private void SaveEvent_Click(object sender, RoutedEventArgs e)
@@ -522,7 +594,7 @@ public partial class MainWindow : Window
     {
         if (sender is not FrameworkElement { Tag: string module }) return;
         ViewModel.ClearQuickFilter(module);
-        StatusText.Text = "已显示全部内容";
+        StatusText.Text = "已清除快捷筛选";
     }
 
     private void EditQuickFilter_RightClick(object sender, MouseButtonEventArgs e)
@@ -803,6 +875,7 @@ public partial class MainWindow : Window
             FileShareAddressesText.Text = string.Join(Environment.NewLine, _fileShareUrls);
             StopFileShareButton.IsEnabled = true;
             OpenFileShareButton.IsEnabled = true;
+            CopyFileShareAddressButton.IsEnabled = true;
             FileSharePortTextBox.IsEnabled = FileSharePasswordBox.IsEnabled = FileShareStoragePathTextBox.IsEnabled = false;
             StatusText.Text = $"局域网文件共享已启动，端口 {port}";
             AppLogger.Info($"启动局域网文件共享：端口={port}，目录={ViewModel.Settings.FileShareStoragePath}");
@@ -829,6 +902,7 @@ public partial class MainWindow : Window
             FileShareAddressesText.Text = "启动服务后显示";
             StartFileShareButton.IsEnabled = true;
             OpenFileShareButton.IsEnabled = false;
+            CopyFileShareAddressButton.IsEnabled = false;
             FileSharePortTextBox.IsEnabled = FileSharePasswordBox.IsEnabled = FileShareStoragePathTextBox.IsEnabled = true;
             StatusText.Text = "局域网文件共享已停止";
             AppLogger.Info("停止局域网文件共享");
@@ -847,6 +921,13 @@ public partial class MainWindow : Window
         if (!_fileShareService.IsRunning || !int.TryParse(FileSharePortTextBox.Text, out var port)) return;
         try { Process.Start(new ProcessStartInfo($"http://localhost:{port}") { UseShellExecute = true }); }
         catch (Exception ex) { AppLogger.Error("打开文件共享页面失败", ex); ShowInfo("无法打开浏览器。"); }
+    }
+
+    private void CopyFileShareAddress_Click(object sender, RoutedEventArgs e)
+    {
+        if (_fileShareUrls.Count == 0) return;
+        Clipboard.SetText(string.Join(Environment.NewLine, _fileShareUrls));
+        StatusText.Text = _fileShareUrls.Count == 1 ? "访问地址已复制" : $"已复制 {_fileShareUrls.Count} 个访问地址";
     }
 
     private async Task RefreshSystemNetworkAsync()

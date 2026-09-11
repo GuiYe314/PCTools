@@ -26,6 +26,6 @@
                 <TextBlock Text="请只保存你理解并信任的命令。管理员命令能够修改系统配置。" Foreground="#B56A25" FontSize="12" TextWrapping="Wrap"/>
             </StackPanel></Border>
         </StackPanel></ScrollViewer>
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0"><Button Content="取消" IsCancel="True" Margin="0,0,8,0"/><Button Content="保存" Style="{StaticResource PrimaryButton}" Click="Save_Click"/></StackPanel>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0"><Button Content="取消" IsCancel="True" Margin="0,0,8,0"/><Button Content="保存" Style="{StaticResource PrimaryButton}" Click="Save_Click" IsDefault="True"/></StackPanel>
     </Grid>
 </Window>

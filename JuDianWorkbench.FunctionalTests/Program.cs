@@ -20,6 +20,7 @@ try
     var first = new MainViewModel(new JsonDataStore(dataFile));
     var folder = new FolderRecord { Name = "收藏测试", Path = managedFolder, Purpose = "测试" };
     Assert(first.SaveFolder(folder) is null, "新增文件夹失败");
+    Assert(first.SelectedFolder?.Id == folder.Id, "新增文件夹后没有自动选中记录");
     first.SetFolderFavorite(folder, true);
     Assert(first.FavoriteFolderCount == 1, "收藏计数没有更新");
     Assert(first.FavoriteFolders.Single().Id == folder.Id, "收藏列表没有同步");
@@ -113,6 +114,7 @@ try
 
     var reminderTask = new EventRecord { Title = "提醒测试", OccurredAt = DateTime.Today, PlannedTime = "00:01", ReminderEnabled = true, ReminderMinutesBefore = 10 };
     Assert(afterRestoreRestart.SaveEvent(reminderTask) is null, "提醒任务保存失败");
+    Assert(afterRestoreRestart.DashboardTasks.Any(x => x.Id == reminderTask.Id) && afterRestoreRestart.OpenTaskCount > 0, "工作台没有显示待办任务");
     Assert(afterRestoreRestart.GetDueReminders(DateTime.Now).Any(x => x.Id == reminderTask.Id), "到期提醒没有被识别");
     afterRestoreRestart.MarkReminderShown(reminderTask);
     Assert(afterRestoreRestart.GetDueReminders(DateTime.Now).All(x => x.Id != reminderTask.Id), "提醒去重没有生效");
@@ -255,6 +257,7 @@ try
     Assert(persistedCommand.RunCount == 1 && persistedCommand.LastRunStatus == "测试记录", "命令执行记录没有持久化");
     afterCommandRestart.DeleteCommand(batchRecord);
     Assert(afterCommandRestart.CommandCount == 1, "快捷命令删除失败");
+    Assert(afterCommandRestart.SelectedCommand?.Id == cmdRecord.Id, "删除命令后没有选中下一条可见记录");
 
     if (Environment.GetEnvironmentVariable("JUDIAN_LIVE_GITHUB_TEST") == "1")
     {

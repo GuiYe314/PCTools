@@ -26,7 +26,7 @@
 - `App.xaml`：全局颜色、控件样式、转换器和主题资源。
 - `App.xaml.cs`：单实例互斥锁、全局异常记录、退出后重启。
 - `MainWindow.xaml`：工作台、文件夹、任务、命令中心、GitHub、文件共享、系统与网络、设置八个页面；左侧导航按个人管理、工具和发现分组，首页承担跨模块快速操作与状态概览。
-- `MainWindow.xaml.cs`：UI 事件、确认对话框、窗口导航以及服务调用。业务数据状态尽量留在 `MainViewModel`，系统边界操作留在 `Services`。
+- `MainWindow.xaml.cs`：UI 事件、确认对话框、统一窗口导航、页面感知搜索、键盘快捷键以及服务调用。业务数据状态尽量留在 `MainViewModel`，系统边界操作留在 `Services`。
 - 其他 `*Window.xaml(.cs)`：编辑或管理弹窗；取消编辑时主窗口使用快照还原对象。
 
 ### 状态和业务编排
@@ -34,6 +34,7 @@
 - `ViewModels/MainViewModel.cs` 持有 `AppData`，负责加载、迁移、保存、集合刷新、搜索筛选、快捷筛选、任务重复推进、提醒判定、GitHub 快照及翻译缓存。
 - `ViewModels/ObservableObject.cs` 提供 `INotifyPropertyChanged`。
 - `MainViewModel` 中的 `Folders`、`Events`、`Commands` 等是面向界面的过滤集合；真实持久化集合位于私有 `_data`。
+- `DashboardTasks` 是首页专用的最多六条未完成任务，按到期时间排序；主列表刷新后应保留当前选择，原记录不可见时回退到第一条可见记录。
 
 ### 数据模型
 
@@ -105,6 +106,8 @@
    dotnet run --project .\JuDianFileShare.Tests\JuDianFileShare.Tests.csproj
    ```
 
+   主程序构建与 `JuDianWorkbench.FunctionalTests` 会共享 WPF 中间输出目录，必须顺序执行，不能并行启动；文件共享测试可独立运行。
+
 7. **每次新增、删除或改变功能时必须同步更新文档**：
    - 更新 `JuDianWorkbench/README.md` 的用户功能清单或运行说明；
    - 更新根目录 `README.md` 的主要功能、结构、依赖或使用方式（若受影响）；
@@ -131,6 +134,7 @@
 - 三个模块的快捷筛选、固定状态、排序和持久化
 - 任务保存、归档、恢复、标签、提醒去重、子任务和重复任务
 - 设置、应用名称、功能显示、文件共享配置和默认网卡持久化，以及版本 7 数据迁移
+- 工作台待办摘要，以及列表新增、筛选、删除后的自动选择行为
 - DHCP/静态 IPv4 参数校验和系统快照基础信息
 - GitHub 排名变化、缓存、搜索及翻译缓存
 - 命令校验、分类、搜索、工作目录、执行记录和删除
