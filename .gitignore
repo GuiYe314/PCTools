@@ -8,6 +8,7 @@
 *.user
 *.suo
 *.log
+JuDianFileShare.Server/Data/
 
 # 与主工具集无关的本机辅助项目和脚本
 XRExhibitNetProbe/

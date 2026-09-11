@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>聚点文件共享</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <p class="eyebrow">局域网文件中转站</p>
+        <h1>聚点文件共享</h1>
+        <p class="muted">同一局域网内，通过浏览器安全地上传和下载文件。</p>
+      </div>
+      <button id="logoutButton" class="secondary hidden">退出</button>
+    </header>
+
+    <section id="loginPanel" class="card login-card">
+      <h2>输入访问密码</h2>
+      <form id="loginForm">
+        <input id="password" name="password" type="password" autocomplete="current-password" placeholder="访问密码" required autofocus>
+        <button type="submit">进入共享空间</button>
+      </form>
+      <p id="loginMessage" class="message"></p>
+    </section>
+
+    <div id="appPanel" class="hidden">
+      <section class="card upload-card">
+        <div id="dropZone" class="drop-zone">
+          <input id="fileInput" type="file" multiple>
+          <strong>拖拽文件到这里，或点击选择</strong>
+          <span id="limitText" class="muted"></span>
+        </div>
+        <div id="uploadQueue" class="upload-queue"></div>
+      </section>
+
+      <section class="card">
+        <div class="toolbar">
+          <div>
+            <h2>共享文件</h2>
+            <span id="countText" class="muted"></span>
+          </div>
+          <input id="searchInput" type="search" placeholder="搜索文件名">
+        </div>
+        <div id="emptyState" class="empty hidden">还没有文件，上传第一个吧。</div>
+        <div id="fileList" class="file-list"></div>
+      </section>
+    </div>
+  </main>
+  <div id="toast" class="toast hidden"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

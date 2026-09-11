@@ -1,6 +1,6 @@
 # PCTools / 聚点工作台
 
-PCTools 当前包含“聚点工作台”（`JuDianWorkbench`）：一个面向 Windows 的本地桌面效率工具，用于集中管理文件夹、任务、快捷命令、Unity 项目、GitHub 热门项目以及系统和网络信息。
+PCTools 包含 Windows 桌面效率工具“聚点工作台”（`JuDianWorkbench`），以及供局域网浏览器使用的文件共享服务（`JuDianFileShare.Server`）。
 
 ## 技术栈
 
@@ -23,7 +23,9 @@ PCTools/
 │  ├─ ViewModels/                    # 主状态、筛选和业务编排
 │  ├─ MainWindow.xaml(.cs)           # 主界面与交互事件
 │  └─ *Window.xaml(.cs)              # 编辑、归档、提醒等弹窗
-└─ JuDianWorkbench.FunctionalTests/  # 独立控制台功能测试
+├─ JuDianWorkbench.FunctionalTests/  # 桌面程序控制台功能测试
+├─ JuDianFileShare.Server/           # 局域网 ASP.NET Core 文件共享服务
+└─ JuDianFileShare.Tests/            # 文件存储功能测试
 ```
 
 更细的架构、数据流、维护约束和跨电脑接手流程见 [AGENTS.md](AGENTS.md)。主程序内已有的完整功能清单见 [JuDianWorkbench/README.md](JuDianWorkbench/README.md)。
@@ -39,6 +41,7 @@ PCTools/
 - 本机、网卡、公网 IP、所在地和运营商信息检测
 - DHCP/静态 IPv4 设置（应用时需要 Windows 管理员授权）
 - 软件名称、功能入口、开机启动和每日数据备份设置
+- 局域网 Web 文件共享：密码访问、拖拽上传、进度、搜索、下载、删除和 SHA-256 校验
 
 ## 数据与日志
 
@@ -62,9 +65,20 @@ dotnet run --project .\JuDianWorkbench\JuDianWorkbench.csproj
 
 ```powershell
 dotnet run --project .\JuDianWorkbench.FunctionalTests\JuDianWorkbench.FunctionalTests.csproj
+dotnet run --project .\JuDianFileShare.Tests\JuDianFileShare.Tests.csproj
 ```
 
 测试默认不调用真实 GitHub 或翻译服务。需要进行对应的联网检查时，可设置 `JUDIAN_LIVE_GITHUB_TEST=1` 或 `JUDIAN_LIVE_TRANSLATION_TEST=1`。
+
+## 启动局域网文件共享
+
+先修改 `JuDianFileShare.Server/appsettings.json` 中的 `FileShare:AccessPassword`，再运行：
+
+```powershell
+dotnet run --project .\JuDianFileShare.Server\JuDianFileShare.Server.csproj
+```
+
+服务默认监听 `0.0.0.0:5080`。同一局域网中的设备通过 `http://服务器电脑IP:5080` 访问。共享文件默认保存在服务项目的 `Data/Files` 下，该目录不会提交到 Git。
 
 ## 跨电脑继续开发
 

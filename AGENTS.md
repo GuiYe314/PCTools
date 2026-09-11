@@ -10,6 +10,8 @@
 
 - 主项目：`JuDianWorkbench/JuDianWorkbench.csproj`
 - 测试项目：`JuDianWorkbench.FunctionalTests/JuDianWorkbench.FunctionalTests.csproj`
+- 文件共享服务：`JuDianFileShare.Server/JuDianFileShare.Server.csproj`
+- 文件共享测试：`JuDianFileShare.Tests/JuDianFileShare.Tests.csproj`
 - 目标框架：`net10.0-windows`
 - UI：WPF + XAML
 - 可空引用类型和隐式 using：启用
@@ -58,6 +60,14 @@
 - `TranslationService`：调用 MyMemory，将 UTF-8 文本按 450 字节分段翻译并缓存结果。
 - `SystemNetworkService`：读取系统与网卡信息，检测互联网、公网 IP，并通过提权 PowerShell/netsh 应用 IPv4 设置。
 
+### 局域网文件共享服务
+
+- `JuDianFileShare.Server/Program.cs`：ASP.NET Core 服务启动、密码 Cookie 鉴权、上传/下载/搜索/删除 API 和请求校验。
+- `JuDianFileShare.Server/Services/FileStore.cs`：随机存储文件名、路径隔离、流式大小限制、SHA-256、JSON 原子索引及并发串行化。
+- `JuDianFileShare.Server/wwwroot`：无需前端框架的浏览器界面，提供登录、拖拽上传、进度、列表、搜索、下载和删除确认。
+- `JuDianFileShare.Server/appsettings.json`：监听地址、共享目录、访问密码和单文件大小限制。默认密码只用于首次启动，正式使用前必须修改。
+- `JuDianFileShare.Tests`：文件存储层的离线功能测试。
+
 ## 关键行为与约束
 
 - 数据默认位于 `%LOCALAPPDATA%\JuDianWorkbench\data.json`，不是仓库文件。
@@ -70,6 +80,9 @@
 - 静态 IPv4 参数必须在提权前验证；所有系统级修改都必须保留用户确认。
 - 网络调用必须有超时、取消或明确错误反馈，不得阻塞 UI 线程。
 - 不得提交 API Key、Token、真实个人数据、`data.json`、日志、备份、`bin` 或 `obj`。
+- 文件共享服务必须把上传文件保存在配置的共享目录内，并使用随机存储名；任何浏览器提供的文件名只能作为显示和下载名称。
+- 文件共享的写操作必须同时通过密码 Cookie 和同源请求头校验；下载、删除和索引查询不得绕过鉴权。
+- `JuDianFileShare.Server/Data` 属于运行数据，禁止提交。公网部署前必须改用 HTTPS、强化身份系统和限流；当前实现仅定位为可信局域网服务。
 
 ## 实施新功能的强制流程
 
@@ -87,6 +100,7 @@
    ```powershell
    dotnet build .\JuDianWorkbench\JuDianWorkbench.csproj
    dotnet run --project .\JuDianWorkbench.FunctionalTests\JuDianWorkbench.FunctionalTests.csproj
+   dotnet run --project .\JuDianFileShare.Tests\JuDianFileShare.Tests.csproj
    ```
 
 7. **每次新增、删除或改变功能时必须同步更新文档**：
@@ -128,6 +142,8 @@
 - GitHub 查询使用未认证公共搜索接口，可能受到较低限额影响。
 - 翻译依赖第三方 MyMemory 服务；错误和限额应作为可恢复状态处理。
 - 网络/IP 功能仅适用于 Windows，并可能触发网络短暂中断和 UAC。
+- 文件共享当前使用 HTTP 和基于密码派生值的局域网 Cookie，适合可信局域网；不要直接暴露到公网。
+- 文件共享索引为单机 JSON 文件，适合轻量并发，不适合作为多实例或高并发部署。
 
 ## 跨电脑快速恢复上下文
 
