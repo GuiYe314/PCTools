@@ -13,9 +13,10 @@ try
     await File.WriteAllTextAsync(legacyDataFile, """{"SchemaVersion":7,"Settings":{"ApplicationName":"旧版工作台"}}""");
     var migratedLegacy = new MainViewModel(new JsonDataStore(legacyDataFile));
     Assert(migratedLegacy.Settings.ShowFileShare, "旧版数据迁移后未默认显示文件共享");
+    Assert(migratedLegacy.Settings.ShowWorkModes, "旧版数据迁移后未默认显示工作模式");
     Assert(migratedLegacy.Settings.FileSharePort == 5080 && migratedLegacy.Settings.FileSharePassword == "change-me-now", "旧版数据迁移后文件共享默认配置错误");
     using (var migratedDocument = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(legacyDataFile)))
-        Assert(migratedDocument.RootElement.GetProperty("SchemaVersion").GetInt32() == 8, "旧版数据没有迁移到结构版本 8");
+        Assert(migratedDocument.RootElement.GetProperty("SchemaVersion").GetInt32() == 9, "旧版数据没有迁移到结构版本 9");
 
     var first = new MainViewModel(new JsonDataStore(dataFile));
     var folder = new FolderRecord { Name = "收藏测试", Path = managedFolder, Purpose = "测试" };
@@ -125,6 +126,7 @@ try
     afterRestoreRestart.Settings.ShowCommandCenter = false;
     afterRestoreRestart.Settings.ShowGitHubTrending = false;
     afterRestoreRestart.Settings.ShowFileShare = false;
+    afterRestoreRestart.Settings.ShowWorkModes = false;
     afterRestoreRestart.Settings.FileSharePort = 6090;
     afterRestoreRestart.Settings.FileSharePassword = "test-password";
     afterRestoreRestart.Settings.FileShareStoragePath = Path.Combine(testRoot, "SharedFiles");
@@ -132,7 +134,7 @@ try
     var afterSettingsRestart = new MainViewModel(new JsonDataStore(dataFile));
     Assert(afterSettingsRestart.Settings.SelectedNetworkAdapterName == "测试网卡", "默认网卡没有持久化");
     Assert(afterSettingsRestart.Settings.ApplicationName == "研发工具台", "软件名称没有持久化");
-    Assert(!afterSettingsRestart.Settings.ShowDashboard && !afterSettingsRestart.Settings.ShowCommandCenter && !afterSettingsRestart.Settings.ShowGitHubTrending && !afterSettingsRestart.Settings.ShowFileShare, "功能显示设置没有持久化");
+    Assert(!afterSettingsRestart.Settings.ShowDashboard && !afterSettingsRestart.Settings.ShowCommandCenter && !afterSettingsRestart.Settings.ShowGitHubTrending && !afterSettingsRestart.Settings.ShowFileShare && !afterSettingsRestart.Settings.ShowWorkModes, "功能显示设置没有持久化");
     Assert(afterSettingsRestart.Settings.FileSharePort == 6090 && afterSettingsRestart.Settings.FileSharePassword == "test-password" &&
            afterSettingsRestart.Settings.FileShareStoragePath == Path.Combine(testRoot, "SharedFiles"), "文件共享配置没有持久化");
     var validStaticIp = new IpConfigurationRequest
@@ -152,6 +154,11 @@ try
     Assert(!string.IsNullOrWhiteSpace(systemSnapshot.ComputerName), "计算机名读取失败");
     Assert(!string.IsNullOrWhiteSpace(systemSnapshot.OperatingSystem), "操作系统信息读取失败");
     Assert(systemSnapshot.Memory != "未知", "物理内存信息读取失败");
+    Assert(!string.IsNullOrWhiteSpace(systemSnapshot.WindowsVersion), "Windows 版本详情读取失败");
+    Assert(!string.IsNullOrWhiteSpace(systemSnapshot.CpuDetails), "CPU 详情读取失败");
+    Assert(!string.IsNullOrWhiteSpace(systemSnapshot.MemoryDetails), "内存使用详情读取失败");
+    Assert(!string.IsNullOrWhiteSpace(systemSnapshot.Graphics) && !string.IsNullOrWhiteSpace(systemSnapshot.GraphicsDriver), "显卡信息读取结果为空");
+    Assert(!string.IsNullOrWhiteSpace(systemSnapshot.Display) && !string.IsNullOrWhiteSpace(systemSnapshot.Drives) && !string.IsNullOrWhiteSpace(systemSnapshot.Uptime), "显示器、磁盘或运行时长读取结果为空");
 
     var recurringTask = new EventRecord
     {
@@ -259,6 +266,38 @@ try
     Assert(afterCommandRestart.CommandCount == 1, "快捷命令删除失败");
     Assert(afterCommandRestart.SelectedCommand?.Id == cmdRecord.Id, "删除命令后没有选中下一条可见记录");
 
+    var executableProgram = new ProgramRecord
+    {
+        Name = "AI 助手", Category = "AI", TargetType = "程序",
+        Target = Environment.ProcessPath ?? throw new InvalidOperationException("无法获取测试进程路径"),
+        SkipIfRunning = false
+    };
+    var projectFolderProgram = new ProgramRecord
+    {
+        Name = "Unity 项目目录", Category = "开发", TargetType = "文件夹", Target = unityProjectPath
+    };
+    Assert(WorkModeService.ValidateProgram(new ProgramRecord { Name = "错误网页", TargetType = "网页", Target = "ftp://example.com" }) is not null, "非 HTTP 网页地址未被拦截");
+    Assert(WorkModeService.ValidateProgram(new ProgramRecord { Name = "缺失程序", TargetType = "程序", Target = Path.Combine(testRoot, "missing.exe") }) is not null, "不存在的工作模式程序路径未被拦截");
+    Assert(afterCommandRestart.SaveProgram(executableProgram) is null && afterCommandRestart.SaveProgram(projectFolderProgram) is null, "程序库启动项保存失败");
+    Assert(afterCommandRestart.ProgramCount == 2 && afterCommandRestart.SelectedProgram?.Id == projectFolderProgram.Id, "程序库计数或自动选择错误");
+    var workMode = new WorkModeRecord { Name = "Unity AI 工作", Description = "打开 AI 和 Unity 项目", StopOnFailure = true };
+    workMode.Steps.Add(new WorkModeStep { ProgramId = executableProgram.Id, ProgramName = executableProgram.Name, DelayAfterSeconds = 2 });
+    workMode.Steps.Add(new WorkModeStep { ProgramId = projectFolderProgram.Id, ProgramName = projectFolderProgram.Name });
+    Assert(afterCommandRestart.SaveWorkMode(workMode) is null, "工作模式保存失败");
+    Assert(afterCommandRestart.WorkModeCount == 1 && afterCommandRestart.SelectedWorkMode?.Id == workMode.Id, "工作模式计数或自动选择错误");
+    Assert(afterCommandRestart.PinnedWorkModes.Single().Id == workMode.Id, "固定工作模式没有出现在工作台集合");
+    Assert(afterCommandRestart.DeleteProgram(executableProgram) is not null, "被工作模式引用的启动项可以被错误删除");
+    var syntheticRun = new WorkModeRunSummary();
+    syntheticRun.Results.Add(new(executableProgram.Name, "已启动"));
+    syntheticRun.Results.Add(new(projectFolderProgram.Name, "已跳过", "测试跳过"));
+    afterCommandRestart.RecordWorkModeRun(workMode, syntheticRun);
+    var afterWorkModeRestart = new MainViewModel(new JsonDataStore(dataFile));
+    Assert(afterWorkModeRestart.ProgramCount == 2 && afterWorkModeRestart.WorkModeCount == 1, "重启后程序库或工作模式丢失");
+    var persistedMode = afterWorkModeRestart.WorkModes.Single();
+    Assert(persistedMode.Steps.Select(x => x.ProgramId).SequenceEqual(new[] { executableProgram.Id, projectFolderProgram.Id }), "工作模式启动顺序没有持久化");
+    Assert(persistedMode.RunCount == 1 && persistedMode.LastRunStatus.Contains("已启动 1 项"), "工作模式运行记录没有持久化");
+    Assert(afterWorkModeRestart.Programs.Single(x => x.Id == executableProgram.Id).LaunchCount == 1, "工作模式没有记录已启动程序的次数");
+
     if (Environment.GetEnvironmentVariable("JUDIAN_LIVE_GITHUB_TEST") == "1")
     {
         var liveGitHub = await new GitHubTrendingService().FetchAsync(7, "C#");
@@ -277,7 +316,7 @@ try
         var translated = await new TranslationService().TranslateToChineseAsync("A fast and lightweight desktop productivity tool.");
         Assert(!string.IsNullOrWhiteSpace(translated) && translated != "A fast and lightweight desktop productivity tool.", "真实翻译接口返回无效");
     }
-    Console.WriteLine("PASS: 文件夹读取、Unity 项目识别、通用快捷筛选标签、任务、命令中心、GitHub 热门检测、提醒、备份、默认网卡和 IP 参数校验全部通过。");
+    Console.WriteLine("PASS: 文件夹读取、Unity 项目识别、工作模式、程序库、硬件详情、通用快捷筛选标签、任务、命令中心、GitHub 热门检测、提醒、备份、默认网卡和 IP 参数校验全部通过。");
 }
 finally
 {

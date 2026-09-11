@@ -23,6 +23,8 @@ public sealed class MainViewModel : ObservableObject
     private string _gitHubProjectSearch = string.Empty;
     private string _gitHubLastUpdatedText = "尚未检测";
     private CommandRecord? _selectedCommand;
+    private ProgramRecord? _selectedProgram;
+    private WorkModeRecord? _selectedWorkMode;
     private string _commandSearch = string.Empty;
     private string _selectedCommandCategory = "全部分类";
 
@@ -39,6 +41,9 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<FolderTreeNode> FolderTree { get; } = [];
     public ObservableCollection<GitHubProjectRecord> GitHubProjects { get; } = [];
     public ObservableCollection<CommandRecord> Commands { get; } = [];
+    public ObservableCollection<ProgramRecord> Programs { get; } = [];
+    public ObservableCollection<WorkModeRecord> WorkModes { get; } = [];
+    public ObservableCollection<WorkModeRecord> PinnedWorkModes { get; } = [];
     public ObservableCollection<QuickFilterRecord> FolderQuickFilters { get; } = [];
     public ObservableCollection<QuickFilterRecord> TaskQuickFilters { get; } = [];
     public ObservableCollection<QuickFilterRecord> CommandQuickFilters { get; } = [];
@@ -67,6 +72,8 @@ public sealed class MainViewModel : ObservableObject
         RefreshEvents();
         RebuildCommandCategories();
         RefreshCommands();
+        RefreshPrograms();
+        RefreshWorkModes();
         RefreshQuickFilterCollections();
         LoadCachedGitHubProjects();
     }
@@ -144,6 +151,18 @@ public sealed class MainViewModel : ObservableObject
         set { _selectedCommand = value; RaisePropertyChanged(); }
     }
 
+    public ProgramRecord? SelectedProgram
+    {
+        get => _selectedProgram;
+        set { _selectedProgram = value; RaisePropertyChanged(); }
+    }
+
+    public WorkModeRecord? SelectedWorkMode
+    {
+        get => _selectedWorkMode;
+        set { _selectedWorkMode = value; RaisePropertyChanged(); }
+    }
+
     public string CommandSearch
     {
         get => _commandSearch;
@@ -207,6 +226,9 @@ public sealed class MainViewModel : ObservableObject
     public int GitHubTrendCount => _allGitHubProjects.Count;
     public int GitHubNewCount => _allGitHubProjects.Count(x => x.TrendStatus == "新上榜");
     public int CommandCount => _data.Commands.Count;
+    public int ProgramCount => _data.Programs.Count;
+    public int WorkModeCount => _data.WorkModes.Count;
+    public int PinnedWorkModeCount => _data.WorkModes.Count(x => x.IsPinned);
 
     public int FolderCount => _data.Folders.Count;
     public int FavoriteFolderCount => _data.Folders.Count(x => x.IsFavorite);
@@ -387,6 +409,93 @@ public sealed class MainViewModel : ObservableObject
         RefreshCommands();
         SelectedCommand = record;
         RaisePropertyChanged(nameof(CommandCount));
+    }
+
+    public string? SaveProgram(ProgramRecord program)
+    {
+        var error = WorkModeService.ValidateProgram(program);
+        if (error is not null) return error;
+        if (_data.Programs.Any(x => x.Id != program.Id && x.Name.Equals(program.Name, StringComparison.OrdinalIgnoreCase)))
+            return "程序库中已经存在同名启动项。";
+        var existing = _data.Programs.FirstOrDefault(x => x.Id == program.Id);
+        if (existing is null) _data.Programs.Add(program);
+        foreach (var step in _data.WorkModes.SelectMany(x => x.Steps).Where(x => x.ProgramId == program.Id)) step.ProgramName = program.Name;
+        _store.Save(_data);
+        RefreshPrograms();
+        RefreshWorkModes();
+        SelectedProgram = program;
+        RaisePropertyChanged(nameof(ProgramCount));
+        AppLogger.Info(existing is null ? $"添加程序库启动项：{program.Name}" : $"修改程序库启动项：{program.Name}");
+        return null;
+    }
+
+    public string? DeleteProgram(ProgramRecord program)
+    {
+        var usedBy = _data.WorkModes.Where(x => x.Steps.Any(step => step.ProgramId == program.Id)).Select(x => x.Name).ToList();
+        if (usedBy.Count > 0) return $"该启动项正被工作模式“{string.Join("、", usedBy)}”使用，请先从模式中移除。";
+        _data.Programs.RemoveAll(x => x.Id == program.Id);
+        _store.Save(_data);
+        RefreshPrograms();
+        SelectedProgram = Programs.FirstOrDefault();
+        RaisePropertyChanged(nameof(ProgramCount));
+        AppLogger.Info($"删除程序库启动项：{program.Name}");
+        return null;
+    }
+
+    public void RecordProgramLaunch(ProgramRecord program)
+    {
+        program.LastLaunchedAt = DateTime.Now;
+        program.LaunchCount++;
+        _store.Save(_data);
+        RefreshPrograms();
+        SelectedProgram = program;
+    }
+
+    public string? SaveWorkMode(WorkModeRecord mode)
+    {
+        var error = WorkModeService.ValidateMode(mode, _data.Programs);
+        if (error is not null) return error;
+        if (_data.WorkModes.Any(x => x.Id != mode.Id && x.Name.Equals(mode.Name, StringComparison.OrdinalIgnoreCase)))
+            return "已经存在同名工作模式。";
+        var existing = _data.WorkModes.FirstOrDefault(x => x.Id == mode.Id);
+        if (existing is null) _data.WorkModes.Add(mode);
+        _store.Save(_data);
+        RefreshWorkModes();
+        SelectedWorkMode = mode;
+        RaisePropertyChanged(nameof(WorkModeCount));
+        RaisePropertyChanged(nameof(PinnedWorkModeCount));
+        AppLogger.Info(existing is null ? $"添加工作模式：{mode.Name}" : $"修改工作模式：{mode.Name}");
+        return null;
+    }
+
+    public void DeleteWorkMode(WorkModeRecord mode)
+    {
+        _data.WorkModes.RemoveAll(x => x.Id == mode.Id);
+        _store.Save(_data);
+        RefreshWorkModes();
+        SelectedWorkMode = WorkModes.FirstOrDefault();
+        RaisePropertyChanged(nameof(WorkModeCount));
+        RaisePropertyChanged(nameof(PinnedWorkModeCount));
+        AppLogger.Info($"删除工作模式：{mode.Name}");
+    }
+
+    public void RecordWorkModeRun(WorkModeRecord mode, WorkModeRunSummary summary)
+    {
+        mode.LastRunAt = DateTime.Now;
+        mode.LastRunStatus = summary.StatusText;
+        mode.RunCount++;
+        for (var index = 0; index < summary.Results.Count && index < mode.Steps.Count; index++)
+        {
+            if (summary.Results[index].Status != "已启动") continue;
+            var program = _data.Programs.FirstOrDefault(x => x.Id == mode.Steps[index].ProgramId);
+            if (program is null) continue;
+            program.LastLaunchedAt = DateTime.Now;
+            program.LaunchCount++;
+        }
+        _store.Save(_data);
+        RefreshPrograms();
+        RefreshWorkModes();
+        SelectedWorkMode = mode;
     }
 
     public string? SaveQuickFilter(QuickFilterRecord filter)
@@ -607,10 +716,13 @@ public sealed class MainViewModel : ObservableObject
 
     private void MigrateEventsToTasks()
     {
-        var changed = _data.Events.RemoveAll(x => x.IsSystemLog) > 0 || _data.SchemaVersion < 8;
+        var changed = _data.Events.RemoveAll(x => x.IsSystemLog) > 0 || _data.SchemaVersion < 9;
         _data.GitHubTrendSnapshots ??= [];
         _data.Commands ??= [];
         _data.QuickFilters ??= [];
+        _data.Programs ??= [];
+        _data.WorkModes ??= [];
+        foreach (var mode in _data.WorkModes) mode.Steps ??= [];
         foreach (var folder in _data.Folders) folder.DetectedUnityProjects ??= [];
         foreach (var group in _data.QuickFilters.GroupBy(x => x.Module))
         {
@@ -645,7 +757,7 @@ public sealed class MainViewModel : ObservableObject
                 changed = true;
             }
         }
-        if (_data.SchemaVersion < 8) _data.SchemaVersion = 8;
+        if (_data.SchemaVersion < 9) _data.SchemaVersion = 9;
         if (changed) _store.Save(_data);
     }
 
@@ -680,6 +792,29 @@ public sealed class MainViewModel : ObservableObject
         foreach (var item in query.OrderBy(x => x.Category).ThenBy(x => x.Name)) Commands.Add(item);
         SelectedCommand = Commands.FirstOrDefault(x => x.Id == selectedId) ?? Commands.FirstOrDefault();
         RaisePropertyChanged(nameof(CommandCount));
+    }
+
+    private void RefreshPrograms()
+    {
+        var selectedId = SelectedProgram?.Id;
+        Programs.Clear();
+        foreach (var item in _data.Programs.OrderBy(x => x.Category).ThenBy(x => x.Name)) Programs.Add(item);
+        SelectedProgram = Programs.FirstOrDefault(x => x.Id == selectedId) ?? Programs.FirstOrDefault();
+        RaisePropertyChanged(nameof(ProgramCount));
+    }
+
+    private void RefreshWorkModes()
+    {
+        var selectedId = SelectedWorkMode?.Id;
+        foreach (var step in _data.WorkModes.SelectMany(x => x.Steps))
+            if (_data.Programs.FirstOrDefault(x => x.Id == step.ProgramId) is { } program) step.ProgramName = program.Name;
+        WorkModes.Clear();
+        foreach (var item in _data.WorkModes.OrderByDescending(x => x.IsPinned).ThenBy(x => x.Name)) WorkModes.Add(item);
+        PinnedWorkModes.Clear();
+        foreach (var item in WorkModes.Where(x => x.IsPinned).Take(6)) PinnedWorkModes.Add(item);
+        SelectedWorkMode = WorkModes.FirstOrDefault(x => x.Id == selectedId) ?? WorkModes.FirstOrDefault();
+        RaisePropertyChanged(nameof(WorkModeCount));
+        RaisePropertyChanged(nameof(PinnedWorkModeCount));
     }
 
     private void LoadCachedGitHubProjects()

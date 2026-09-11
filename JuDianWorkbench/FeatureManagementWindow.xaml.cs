@@ -12,6 +12,7 @@ public partial class FeatureManagementWindow : Window
     public bool ShowGitHub { get; private set; }
     public bool ShowSystemNetwork { get; private set; }
     public bool ShowFileShare { get; private set; }
+    public bool ShowWorkModes { get; private set; }
 
     public FeatureManagementWindow(AppSettings settings)
     {
@@ -23,12 +24,13 @@ public partial class FeatureManagementWindow : Window
         GitHubCheckBox.IsChecked = settings.ShowGitHubTrending;
         SystemNetworkCheckBox.IsChecked = settings.ShowSystemNetwork;
         FileShareCheckBox.IsChecked = settings.ShowFileShare;
+        WorkModesCheckBox.IsChecked = settings.ShowWorkModes;
     }
 
     private void ShowAll_Click(object sender, RoutedEventArgs e)
     {
         DashboardCheckBox.IsChecked = FoldersCheckBox.IsChecked = TasksCheckBox.IsChecked =
-            CommandsCheckBox.IsChecked = GitHubCheckBox.IsChecked = FileShareCheckBox.IsChecked = SystemNetworkCheckBox.IsChecked = true;
+            WorkModesCheckBox.IsChecked = CommandsCheckBox.IsChecked = GitHubCheckBox.IsChecked = FileShareCheckBox.IsChecked = SystemNetworkCheckBox.IsChecked = true;
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -40,6 +42,7 @@ public partial class FeatureManagementWindow : Window
         ShowGitHub = GitHubCheckBox.IsChecked == true;
         ShowSystemNetwork = SystemNetworkCheckBox.IsChecked == true;
         ShowFileShare = FileShareCheckBox.IsChecked == true;
+        ShowWorkModes = WorkModesCheckBox.IsChecked == true;
         DialogResult = true;
     }
 }

@@ -24,6 +24,8 @@ public partial class MainWindow : Window
     private readonly CommandExecutionService _commandExecutionService = new();
     private readonly UnityProjectService _unityProjectService = new();
     private readonly LocalFileShareService _fileShareService = new();
+    private readonly WorkModeService _workModeService = new();
+    private bool _isWorkModeRunning;
     private IReadOnlyList<string> _fileShareUrls = [];
     private bool _systemNetworkLoaded;
     private bool _gitHubInitialCheckAttempted;
@@ -380,7 +382,7 @@ public partial class MainWindow : Window
 
     private void NavigateToFeature(string target)
     {
-        var button = new[] { DashboardNavButton, FoldersNavButton, TasksNavButton, CommandNavButton, GitHubNavButton, FileShareNavButton, SystemNetworkNavButton, SettingsNavButton }
+        var button = new[] { DashboardNavButton, FoldersNavButton, TasksNavButton, WorkModesNavButton, CommandNavButton, GitHubNavButton, FileShareNavButton, SystemNetworkNavButton, SettingsNavButton }
             .FirstOrDefault(x => string.Equals(x.Tag?.ToString(), target, StringComparison.Ordinal));
         if (button is null) return;
         if (button.Visibility != Visibility.Visible)
@@ -397,6 +399,7 @@ public partial class MainWindow : Window
         FoldersPage.Visibility = target == "Folders" ? Visibility.Visible : Visibility.Collapsed;
         EventsPage.Visibility = target == "Events" ? Visibility.Visible : Visibility.Collapsed;
         CommandsPage.Visibility = target == "Commands" ? Visibility.Visible : Visibility.Collapsed;
+        WorkModesPage.Visibility = target == "WorkModes" ? Visibility.Visible : Visibility.Collapsed;
         GitHubPage.Visibility = target == "GitHub" ? Visibility.Visible : Visibility.Collapsed;
         FileSharePage.Visibility = target == "FileShare" ? Visibility.Visible : Visibility.Collapsed;
         SystemNetworkPage.Visibility = target == "SystemNetwork" ? Visibility.Visible : Visibility.Collapsed;
@@ -410,6 +413,7 @@ public partial class MainWindow : Window
             "Folders" => "文件夹管理",
             "Events" => "任务管理",
             "Commands" => "命令中心",
+            "WorkModes" => "工作模式",
             "GitHub" => "GitHub 热门",
             "FileShare" => "文件共享",
             "SystemNetwork" => "系统与网络",
@@ -447,6 +451,7 @@ public partial class MainWindow : Window
         }
         if (e.Key != Key.N || Keyboard.Modifiers != ModifierKeys.Control) return;
         if (FoldersPage.Visibility == Visibility.Visible) NewFolder_Click(this, e);
+        else if (WorkModesPage.Visibility == Visibility.Visible) NewWorkMode_Click(this, e);
         else if (CommandsPage.Visibility == Visibility.Visible) NewCommand_Click(this, e);
         else OpenNewTaskDialog();
         e.Handled = true;
@@ -517,6 +522,110 @@ public partial class MainWindow : Window
         if (MessageBox.Show($"确定删除事件“{ViewModel.SelectedEvent.Title}”？", "确认删除", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         ViewModel.DeleteEvent(ViewModel.SelectedEvent);
         StatusText.Text = "事件已删除";
+    }
+
+    private void NewProgram_Click(object sender, RoutedEventArgs e)
+    {
+        var program = new ProgramRecord();
+        var dialog = new ProgramEditWindow(program, this, true);
+        if (dialog.ShowDialog() != true) return;
+        var error = ViewModel.SaveProgram(program);
+        if (error is not null) { ShowInfo(error); return; }
+        StatusText.Text = $"启动项“{program.Name}”已加入程序库";
+    }
+
+    private void EditProgram_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.SelectedProgram is not { } program) return;
+        var snapshot = CopyProgram(program);
+        var dialog = new ProgramEditWindow(program, this, false);
+        if (dialog.ShowDialog() != true) { RestoreProgram(program, snapshot); RefreshBindings(); return; }
+        var error = ViewModel.SaveProgram(program);
+        if (error is not null) { RestoreProgram(program, snapshot); RefreshBindings(); ShowInfo(error); return; }
+        StatusText.Text = $"启动项“{program.Name}”已保存";
+    }
+
+    private void DeleteProgram_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.SelectedProgram is not { } program) return;
+        if (MessageBox.Show(this, $"从程序库移除“{program.Name}”？\n不会卸载程序或删除任何文件。", "确认移除", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        var error = ViewModel.DeleteProgram(program);
+        if (error is not null) { ShowInfo(error); return; }
+        StatusText.Text = "启动项已从程序库移除";
+    }
+
+    private async void RunProgram_Click(object sender, RoutedEventArgs e)
+    {
+        var program = (sender as FrameworkElement)?.Tag as ProgramRecord ?? ViewModel.SelectedProgram;
+        if (program is null) return;
+        var result = await _workModeService.LaunchProgramAsync(program);
+        if (result.Status == "已启动") ViewModel.RecordProgramLaunch(program);
+        StatusText.Text = $"{program.Name}：{result.Status}";
+        if (result.Status == "失败") { AppLogger.Error($"启动程序库项目失败：{program.Name}，{result.Error}"); ShowInfo($"启动失败：{result.Error}"); }
+        else AppLogger.Info($"启动程序库项目：{program.Name}，{result.Status}");
+    }
+
+    private void NewWorkMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.Programs.Count == 0) { ShowInfo("请先在“程序库”中添加至少一个程序、网页或文件夹。"); WorkModeTabControl.SelectedIndex = 1; return; }
+        var mode = new WorkModeRecord();
+        var dialog = new WorkModeEditWindow(mode, ViewModel.Programs, this, true);
+        if (dialog.ShowDialog() != true) return;
+        var error = ViewModel.SaveWorkMode(mode);
+        if (error is not null) { ShowInfo(error); return; }
+        StatusText.Text = $"工作模式“{mode.Name}”已创建";
+    }
+
+    private void EditWorkMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.SelectedWorkMode is not { } mode) return;
+        var snapshot = CopyWorkMode(mode);
+        var dialog = new WorkModeEditWindow(mode, ViewModel.Programs, this, false);
+        if (dialog.ShowDialog() != true) { RestoreWorkMode(mode, snapshot); RefreshBindings(); return; }
+        var error = ViewModel.SaveWorkMode(mode);
+        if (error is not null) { RestoreWorkMode(mode, snapshot); RefreshBindings(); ShowInfo(error); return; }
+        StatusText.Text = $"工作模式“{mode.Name}”已保存";
+    }
+
+    private void DeleteWorkMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.SelectedWorkMode is not { } mode) return;
+        if (MessageBox.Show(this, $"删除工作模式“{mode.Name}”？\n程序库中的启动项不会被删除。", "确认删除", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        ViewModel.DeleteWorkMode(mode);
+        StatusText.Text = "工作模式已删除";
+    }
+
+    private async void RunWorkMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isWorkModeRunning) { StatusText.Text = "已有工作模式正在启动，请稍候"; return; }
+        var mode = (sender as FrameworkElement)?.Tag as WorkModeRecord ?? ViewModel.SelectedWorkMode;
+        if (mode is null) return;
+        var validationError = WorkModeService.ValidateMode(mode, ViewModel.Programs);
+        if (validationError is not null) { ShowInfo(validationError); return; }
+        if (mode.ConfirmBeforeRun)
+        {
+            var list = string.Join(Environment.NewLine, mode.Steps.Select((x, index) => $"{index + 1}. {x.DisplayText}"));
+            if (MessageBox.Show(this, $"准备启动工作模式“{mode.Name}”：\n\n{list}\n\n是否继续？", "启动工作模式", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        }
+
+        _isWorkModeRunning = true;
+        RunWorkModeButton.IsEnabled = false;
+        StatusText.Text = $"正在启动工作模式：{mode.Name}";
+        try
+        {
+            var summary = await _workModeService.LaunchModeAsync(mode, ViewModel.Programs);
+            ViewModel.RecordWorkModeRun(mode, summary);
+            StatusText.Text = $"{mode.Name}：{summary.StatusText}";
+            AppLogger.Info($"启动工作模式：{mode.Name}，{summary.StatusText}");
+            if (summary.FailedCount > 0)
+            {
+                var failures = string.Join(Environment.NewLine, summary.Results.Where(x => x.Status == "失败").Select(x => $"• {x.Name}：{x.Error}"));
+                AppLogger.Error($"工作模式部分项目启动失败：{mode.Name}{Environment.NewLine}{failures}");
+                ShowInfo($"工作模式已执行，但有项目失败：\n{failures}");
+            }
+        }
+        catch (OperationCanceledException) { StatusText.Text = "工作模式启动已取消"; }
+        finally { _isWorkModeRunning = false; RunWorkModeButton.IsEnabled = true; }
     }
 
     private void NewCommand_Click(object sender, RoutedEventArgs e)
@@ -690,12 +799,13 @@ public partial class MainWindow : Window
         settings.ShowFolderManagement = dialog.ShowFolders;
         settings.ShowTaskManagement = dialog.ShowTasks;
         settings.ShowCommandCenter = dialog.ShowCommands;
+        settings.ShowWorkModes = dialog.ShowWorkModes;
         settings.ShowGitHubTrending = dialog.ShowGitHub;
         settings.ShowFileShare = dialog.ShowFileShare;
         settings.ShowSystemNetwork = dialog.ShowSystemNetwork;
         ViewModel.SaveSettings();
         ApplyFeatureVisibility();
-        AppLogger.Info($"更新功能显示：工作台={settings.ShowDashboard}，文件夹={settings.ShowFolderManagement}，任务={settings.ShowTaskManagement}，命令中心={settings.ShowCommandCenter}，GitHub={settings.ShowGitHubTrending}，文件共享={settings.ShowFileShare}，系统网络={settings.ShowSystemNetwork}");
+        AppLogger.Info($"更新功能显示：工作台={settings.ShowDashboard}，文件夹={settings.ShowFolderManagement}，任务={settings.ShowTaskManagement}，工作模式={settings.ShowWorkModes}，命令中心={settings.ShowCommandCenter}，GitHub={settings.ShowGitHubTrending}，文件共享={settings.ShowFileShare}，系统网络={settings.ShowSystemNetwork}");
         StatusText.Text = "左侧功能面板已更新";
     }
 
@@ -717,12 +827,13 @@ public partial class MainWindow : Window
         FoldersNavButton.Visibility = settings.ShowFolderManagement ? Visibility.Visible : Visibility.Collapsed;
         TasksNavButton.Visibility = settings.ShowTaskManagement ? Visibility.Visible : Visibility.Collapsed;
         CommandNavButton.Visibility = settings.ShowCommandCenter ? Visibility.Visible : Visibility.Collapsed;
+        WorkModesNavButton.Visibility = settings.ShowWorkModes ? Visibility.Visible : Visibility.Collapsed;
         GitHubNavButton.Visibility = settings.ShowGitHubTrending ? Visibility.Visible : Visibility.Collapsed;
         FileShareNavButton.Visibility = settings.ShowFileShare ? Visibility.Visible : Visibility.Collapsed;
         SystemNetworkNavButton.Visibility = settings.ShowSystemNetwork ? Visibility.Visible : Visibility.Collapsed;
         SettingsNavButton.Visibility = Visibility.Visible;
 
-        var featureButtons = new[] { DashboardNavButton, FoldersNavButton, TasksNavButton, CommandNavButton, GitHubNavButton, FileShareNavButton, SystemNetworkNavButton };
+        var featureButtons = new[] { DashboardNavButton, FoldersNavButton, TasksNavButton, WorkModesNavButton, CommandNavButton, GitHubNavButton, FileShareNavButton, SystemNetworkNavButton };
         var checkedButton = featureButtons.Append(SettingsNavButton).FirstOrDefault(x => x.IsChecked == true);
         if (checkedButton?.Visibility != Visibility.Visible)
             (featureButtons.FirstOrDefault(x => x.Visibility == Visibility.Visible) ?? SettingsNavButton).IsChecked = true;
@@ -952,6 +1063,16 @@ public partial class MainWindow : Window
             CpuText.Text = snapshot.Cpu;
             MemoryText.Text = snapshot.Memory;
             ArchitectureText.Text = snapshot.Architecture;
+            WindowsVersionText.Text = snapshot.WindowsVersion;
+            CpuDetailsText.Text = snapshot.CpuDetails;
+            MemoryDetailsText.Text = snapshot.MemoryDetails;
+            GraphicsText.Text = snapshot.Graphics;
+            GraphicsDriverText.Text = snapshot.GraphicsDriver;
+            DisplayText.Text = snapshot.Display;
+            MotherboardText.Text = snapshot.Motherboard;
+            BiosText.Text = snapshot.Bios;
+            DrivesText.Text = snapshot.Drives;
+            UptimeText.Text = snapshot.Uptime;
             NetworkAdapterComboBox.ItemsSource = snapshot.Adapters;
             NetworkAdapterComboBox.SelectedItem = snapshot.Adapters.FirstOrDefault(x => x.Name == selectedName)
                                                         ?? snapshot.Adapters.FirstOrDefault(x => x.Status == "已连接")
@@ -1179,6 +1300,45 @@ public partial class MainWindow : Window
                 Id = item.Id, Title = item.Title, Note = item.Note, IsCompleted = item.IsCompleted,
                 CreatedAt = item.CreatedAt, CompletedAt = item.CompletedAt
             });
+    }
+
+    private static ProgramRecord CopyProgram(ProgramRecord source) => new()
+    {
+        Id = source.Id, Name = source.Name, Category = source.Category, TargetType = source.TargetType,
+        Target = source.Target, Arguments = source.Arguments, WorkingDirectory = source.WorkingDirectory,
+        RunAsAdministrator = source.RunAsAdministrator, SkipIfRunning = source.SkipIfRunning,
+        CreatedAt = source.CreatedAt, LastLaunchedAt = source.LastLaunchedAt, LaunchCount = source.LaunchCount
+    };
+
+    private static void RestoreProgram(ProgramRecord target, ProgramRecord source)
+    {
+        target.Name = source.Name; target.Category = source.Category; target.TargetType = source.TargetType;
+        target.Target = source.Target; target.Arguments = source.Arguments; target.WorkingDirectory = source.WorkingDirectory;
+        target.RunAsAdministrator = source.RunAsAdministrator; target.SkipIfRunning = source.SkipIfRunning;
+        target.LastLaunchedAt = source.LastLaunchedAt; target.LaunchCount = source.LaunchCount;
+    }
+
+    private static WorkModeRecord CopyWorkMode(WorkModeRecord source) => new()
+    {
+        Id = source.Id, Name = source.Name, Description = source.Description,
+        ConfirmBeforeRun = source.ConfirmBeforeRun, StopOnFailure = source.StopOnFailure, IsPinned = source.IsPinned,
+        Steps = new(source.Steps.Select(CopyWorkModeStep)), CreatedAt = source.CreatedAt,
+        LastRunAt = source.LastRunAt, LastRunStatus = source.LastRunStatus, RunCount = source.RunCount
+    };
+
+    private static WorkModeStep CopyWorkModeStep(WorkModeStep source) => new()
+    {
+        Id = source.Id, ProgramId = source.ProgramId, ProgramName = source.ProgramName,
+        DelayAfterSeconds = source.DelayAfterSeconds
+    };
+
+    private static void RestoreWorkMode(WorkModeRecord target, WorkModeRecord source)
+    {
+        target.Name = source.Name; target.Description = source.Description;
+        target.ConfirmBeforeRun = source.ConfirmBeforeRun; target.StopOnFailure = source.StopOnFailure;
+        target.IsPinned = source.IsPinned; target.LastRunAt = source.LastRunAt;
+        target.LastRunStatus = source.LastRunStatus; target.RunCount = source.RunCount;
+        target.Steps = new(source.Steps.Select(CopyWorkModeStep));
     }
 
     private static CommandRecord CopyCommand(CommandRecord source) => new()

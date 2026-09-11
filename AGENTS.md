@@ -4,7 +4,7 @@
 
 ## 项目目标
 
-“聚点工作台”是一个 Windows 本地 WPF 效率工具。它将常用文件夹、任务、快捷命令、Unity 项目入口、GitHub 热门项目以及系统/网络工具集中在一个应用中。项目当前重视：本地优先、低依赖、数据安全、清晰的中文界面和可验证的功能变更。
+“聚点工作台”是一个 Windows 本地 WPF 效率工具。它将常用文件夹、任务、快捷命令、组合式工作模式、Unity 项目入口、GitHub 热门项目以及系统/网络工具集中在一个应用中。项目当前重视：本地优先、低依赖、数据安全、清晰的中文界面和可验证的功能变更。
 
 ## 当前技术基线
 
@@ -16,7 +16,7 @@
 - UI：WPF + XAML
 - 可空引用类型和隐式 using：启用
 - 外部 NuGet 包：当前无
-- 应用数据结构版本：`AppData.SchemaVersion = 8`
+- 应用数据结构版本：`AppData.SchemaVersion = 9`
 - 默认分支：`main`
 
 ## 架构与职责
@@ -25,24 +25,27 @@
 
 - `App.xaml`：全局颜色、控件样式、转换器和主题资源。
 - `App.xaml.cs`：单实例互斥锁、全局异常记录、退出后重启。
-- `MainWindow.xaml`：工作台、文件夹、任务、命令中心、GitHub、文件共享、系统与网络、设置八个页面；左侧导航按个人管理、工具和发现分组，首页承担跨模块快速操作与状态概览。
+- `MainWindow.xaml`：工作台、文件夹、任务、工作模式、命令中心、GitHub、文件共享、系统与网络、设置九个页面；左侧导航按个人管理、工具和发现分组，首页承担跨模块快速操作与状态概览。
 - `MainWindow.xaml.cs`：UI 事件、确认对话框、统一窗口导航、页面感知搜索、键盘快捷键以及服务调用。业务数据状态尽量留在 `MainViewModel`，系统边界操作留在 `Services`。
 - 其他 `*Window.xaml(.cs)`：编辑或管理弹窗；取消编辑时主窗口使用快照还原对象。
 
 ### 状态和业务编排
 
-- `ViewModels/MainViewModel.cs` 持有 `AppData`，负责加载、迁移、保存、集合刷新、搜索筛选、快捷筛选、任务重复推进、提醒判定、GitHub 快照及翻译缓存。
+- `ViewModels/MainViewModel.cs` 持有 `AppData`，负责加载、迁移、保存、集合刷新、搜索筛选、快捷筛选、任务重复推进、提醒判定、工作模式编排记录、GitHub 快照及翻译缓存。
 - `ViewModels/ObservableObject.cs` 提供 `INotifyPropertyChanged`。
-- `MainViewModel` 中的 `Folders`、`Events`、`Commands` 等是面向界面的过滤集合；真实持久化集合位于私有 `_data`。
+- `MainViewModel` 中的 `Folders`、`Events`、`Programs`、`WorkModes`、`Commands` 等是面向界面的集合；真实持久化集合位于私有 `_data`。
 - `DashboardTasks` 是首页专用的最多六条未完成任务，按到期时间排序；主列表刷新后应保留当前选择，原记录不可见时回退到第一条可见记录。
+- `PinnedWorkModes` 是首页最多六个常用工作模式；`IsPinned` 变化后必须同步刷新首页入口与模式计数。
 
 ### 数据模型
 
-- `AppData`：持久化根对象，包含文件夹、任务、GitHub 快照、命令、快捷筛选和设置。
-- `AppSettings`：应用名称、开机启动、备份、网卡、GitHub 筛选、文件共享和功能显示设置。
+- `AppData`：持久化根对象，包含文件夹、任务、程序库、工作模式、GitHub 快照、命令、快捷筛选和设置。
+- `AppSettings`：应用名称、开机启动、备份、网卡、GitHub 筛选、文件共享、工作模式入口和功能显示设置。
 - `FolderRecord` / `FolderTreeNode` / `UnityProjectInfo`：文件夹登记、延迟目录树和 Unity 检测结果。
 - `EventRecord` / `SubTaskRecord` / `ReminderOption`：任务、子任务、截止时间、提醒、归档和重复序列。
 - `CommandRecord` / `CommandLaunchResult`：快捷命令配置和启动结果。
+- `ProgramRecord`：工作模式可复用的 EXE、网页或文件夹启动项，含启动参数、工作目录及运行记录。
+- `WorkModeRecord` / `WorkModeStep` / `WorkModeRunSummary`：组合启动模式、顺序步骤、步骤等待和运行汇总。
 - `QuickFilterRecord`：文件夹、任务、命令三个模块的持久化组合筛选。
 - `GitHubProjectRecord` / `GitHubTrendSnapshot` / `GitHubTrendResult`：热门仓库结果、排名比较和缓存。
 - `SystemNetworkSnapshot` / `NetworkAdapterInfo` / `IpConfigurationRequest`：系统网络展示与 IP 配置请求。
@@ -56,10 +59,11 @@
 - `AppLogger`：写入 `%LOCALAPPDATA%\JuDianWorkbench\Logs`，日志失败不应导致应用崩溃。
 - `AutoStartService`：管理当前用户注册表 `Run` 项。
 - `CommandExecutionService`：校验并启动 CMD、软件或 BAT/CMD；管理员模式触发 UAC。
+- `WorkModeService`：校验程序库与工作模式，按顺序启动 EXE、HTTP/HTTPS 网页或文件夹，并处理重复程序、步骤等待和失败停止策略。
 - `UnityProjectService`：最多向下四层、最多识别 20 个 Unity 项目，并寻找匹配 Editor。
 - `GitHubTrendingService`：调用 GitHub Search API，默认每次取 30 个仓库，记录限额及前后快照差异。
 - `TranslationService`：调用 MyMemory，将 UTF-8 文本按 450 字节分段翻译并缓存结果。
-- `SystemNetworkService`：读取系统与网卡信息，检测互联网、公网 IP，并通过提权 PowerShell/netsh 应用 IPv4 设置。
+- `SystemNetworkService`：读取 Windows、CPU、内存、显卡、驱动、显示器、主板、BIOS、磁盘、运行时长和网卡信息，检测互联网、公网 IP，并通过提权 PowerShell/netsh 应用 IPv4 设置。
 - `LocalFileShareService`：在 WPF 进程内托管 ASP.NET Core 文件共享服务，负责启动、停止、日志和局域网访问地址发现。
 
 ### 局域网文件共享服务
@@ -75,6 +79,8 @@
 
 - 数据默认位于 `%LOCALAPPDATA%\JuDianWorkbench\data.json`，不是仓库文件。
 - 删除文件夹记录不能删除真实文件夹；删除命令记录不能删除程序或脚本。
+- 删除程序库记录不能删除真实程序、网页或目录；仍被工作模式引用时必须拒绝删除并明确指出引用模式。
+- 工作模式只按保存顺序启动项目并记录结果；第一版不得自动关闭程序、结束进程或卸载软件。网页启动项仅允许绝对 `http`/`https` 地址。
 - 文件夹路径变化后必须清除旧的 Unity 扫描结果。
 - 重复任务仅在当前期首次完成时生成下一期，依靠 `RepeatAdvanceProcessed` 防止重复生成。
 - 提醒通过 30 秒定时器检查，`ReminderSentAt` 用于去重；改变时间或提醒参数时要重置它。
@@ -135,7 +141,8 @@
 - 任务保存、归档、恢复、标签、提醒去重、子任务和重复任务
 - 设置、应用名称、功能显示、文件共享配置和默认网卡持久化，以及版本 7 数据迁移
 - 工作台待办摘要，以及列表新增、筛选、删除后的自动选择行为
-- DHCP/静态 IPv4 参数校验和系统快照基础信息
+- DHCP/静态 IPv4 参数校验，以及显卡、驱动、主板、BIOS、内存使用、磁盘和运行时长等系统快照信息
+- 程序库的路径/URL 校验、引用删除保护、工作模式顺序与运行记录持久化，以及版本 9 数据迁移
 - GitHub 排名变化、缓存、搜索及翻译缓存
 - 命令校验、分类、搜索、工作目录、执行记录和删除
 
@@ -144,6 +151,7 @@
 ## 已知维护关注点
 
 - `MainWindow.xaml.cs` 和 `MainViewModel.cs` 已较大，后续功能宜逐步拆分，而不是继续集中堆叠。
+- 工作模式第一版只有顺序启动与可选等待；自动关闭、结束进程、卸载和复杂条件编排不在当前安全边界内。
 - JSON 加载失败当前会记录日志并返回全新数据；涉及恢复策略时需特别避免静默覆盖损坏文件。
 - GitHub 查询使用未认证公共搜索接口，可能受到较低限额影响。
 - 翻译依赖第三方 MyMemory 服务；错误和限额应作为可恢复状态处理。

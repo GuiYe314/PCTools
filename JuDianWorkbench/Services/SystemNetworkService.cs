@@ -18,6 +18,7 @@ public sealed class SystemNetworkService
     public async Task<SystemNetworkSnapshot> GetSnapshotAsync(bool includePublicInfo, CancellationToken cancellationToken = default)
     {
         var adapters = GetAdapters();
+        var graphics = GetGraphicsInfo();
         var localNetwork = NetworkInterface.GetIsNetworkAvailable() && adapters.Any(x => x.Status == "已连接");
         var (hasInternet, internetDetail) = await CheckInternetAsync(cancellationToken);
         var publicIp = "未查询";
@@ -68,6 +69,16 @@ public sealed class SystemNetworkService
             Cpu = GetCpuName(),
             Memory = GetMemoryText(),
             Architecture = $"系统 {RuntimeInformation.OSArchitecture} / 进程 {RuntimeInformation.ProcessArchitecture}",
+            WindowsVersion = GetWindowsVersion(),
+            CpuDetails = GetCpuDetails(),
+            MemoryDetails = GetMemoryDetails(),
+            Graphics = graphics.Name,
+            GraphicsDriver = graphics.Driver,
+            Display = $"主显示器 {GetSystemMetrics(0)} × {GetSystemMetrics(1)}",
+            Motherboard = GetBiosText("BaseBoardManufacturer", "BaseBoardProduct"),
+            Bios = GetBiosText("BIOSVendor", "BIOSVersion", "BIOSReleaseDate"),
+            Drives = GetDrivesText(),
+            Uptime = FormatUptime(TimeSpan.FromMilliseconds(Environment.TickCount64)),
             PublicIp = publicIp,
             Location = location,
             Isp = isp,
@@ -211,6 +222,86 @@ public sealed class SystemNetworkService
         return GlobalMemoryStatusEx(status) ? $"{status.TotalPhysical / 1024d / 1024 / 1024:F1} GB" : "未知";
     }
 
+    private static string GetMemoryDetails()
+    {
+        var status = new MemoryStatusEx();
+        if (!GlobalMemoryStatusEx(status)) return "未知";
+        var available = status.AvailablePhysical / 1024d / 1024 / 1024;
+        var used = (status.TotalPhysical - status.AvailablePhysical) / 1024d / 1024 / 1024;
+        return $"已用 {used:F1} GB · 可用 {available:F1} GB · 使用率 {status.MemoryLoad}%";
+    }
+
+    private static string GetCpuDetails()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
+            var mhz = key?.GetValue("~MHz")?.ToString();
+            var speed = int.TryParse(mhz, out var value) ? $" · 约 {value / 1000d:F2} GHz" : string.Empty;
+            return $"{Environment.ProcessorCount} 个逻辑处理器{speed}";
+        }
+        catch { return $"{Environment.ProcessorCount} 个逻辑处理器"; }
+    }
+
+    private static string GetWindowsVersion()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
+            var product = key?.GetValue("ProductName")?.ToString() ?? RuntimeInformation.OSDescription;
+            var displayVersion = key?.GetValue("DisplayVersion")?.ToString();
+            var build = key?.GetValue("CurrentBuildNumber")?.ToString();
+            var ubr = key?.GetValue("UBR")?.ToString();
+            return $"{product}" + (string.IsNullOrWhiteSpace(displayVersion) ? string.Empty : $" {displayVersion}") +
+                   (string.IsNullOrWhiteSpace(build) ? string.Empty : $" · Build {build}{(string.IsNullOrWhiteSpace(ubr) ? string.Empty : $".{ubr}")}");
+        }
+        catch { return RuntimeInformation.OSDescription; }
+    }
+
+    private static (string Name, string Driver) GetGraphicsInfo()
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var drivers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var root = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}");
+            foreach (var subKeyName in root?.GetSubKeyNames().Where(x => x.Length == 4 && x.All(char.IsDigit)) ?? [])
+            {
+                using var key = root!.OpenSubKey(subKeyName);
+                var name = key?.GetValue("DriverDesc")?.ToString()?.Trim();
+                if (!string.IsNullOrWhiteSpace(name) && !name.Contains("Remote", StringComparison.OrdinalIgnoreCase)) names.Add(name);
+                var version = key?.GetValue("DriverVersion")?.ToString()?.Trim();
+                if (!string.IsNullOrWhiteSpace(version)) drivers.Add(version);
+            }
+        }
+        catch (Exception ex) { AppLogger.Error("读取显卡信息失败", ex); }
+        return (names.Count == 0 ? "未获取" : string.Join(" / ", names), drivers.Count == 0 ? "未获取" : string.Join(" / ", drivers));
+    }
+
+    private static string GetBiosText(params string[] valueNames)
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\BIOS");
+            var values = valueNames.Select(x => key?.GetValue(x)?.ToString()?.Trim()).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
+            return values.Count == 0 ? "未获取" : string.Join(" · ", values);
+        }
+        catch { return "未获取"; }
+    }
+
+    private static string GetDrivesText()
+    {
+        try
+        {
+            return string.Join(Environment.NewLine, DriveInfo.GetDrives().Where(x => x.IsReady && x.DriveType == DriveType.Fixed).Select(x =>
+                $"{x.Name.TrimEnd('\\')}  {x.TotalSize / 1024d / 1024 / 1024:F0} GB · 可用 {x.AvailableFreeSpace / 1024d / 1024 / 1024:F0} GB"));
+        }
+        catch { return "未获取"; }
+    }
+
+    private static string FormatUptime(TimeSpan uptime) =>
+        uptime.TotalDays >= 1 ? $"{(int)uptime.TotalDays} 天 {uptime.Hours} 小时" : $"{uptime.Hours} 小时 {uptime.Minutes} 分钟";
+
     private static string GetText(JsonElement element, string property, string fallback) =>
         element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? fallback : fallback;
 
@@ -219,6 +310,9 @@ public sealed class SystemNetworkService
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GlobalMemoryStatusEx([In, Out] MemoryStatusEx buffer);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
     private sealed class MemoryStatusEx
