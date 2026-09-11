@@ -16,7 +16,7 @@
 - UI：WPF + XAML
 - 可空引用类型和隐式 using：启用
 - 外部 NuGet 包：当前无
-- 应用数据结构版本：`AppData.SchemaVersion = 7`
+- 应用数据结构版本：`AppData.SchemaVersion = 8`
 - 默认分支：`main`
 
 ## 架构与职责
@@ -25,7 +25,7 @@
 
 - `App.xaml`：全局颜色、控件样式、转换器和主题资源。
 - `App.xaml.cs`：单实例互斥锁、全局异常记录、退出后重启。
-- `MainWindow.xaml`：工作台、文件夹、任务、命令中心、GitHub、系统与网络、设置七个页面。
+- `MainWindow.xaml`：工作台、文件夹、任务、命令中心、GitHub、文件共享、系统与网络、设置八个页面。
 - `MainWindow.xaml.cs`：UI 事件、确认对话框、窗口导航以及服务调用。业务数据状态尽量留在 `MainViewModel`，系统边界操作留在 `Services`。
 - 其他 `*Window.xaml(.cs)`：编辑或管理弹窗；取消编辑时主窗口使用快照还原对象。
 
@@ -38,7 +38,7 @@
 ### 数据模型
 
 - `AppData`：持久化根对象，包含文件夹、任务、GitHub 快照、命令、快捷筛选和设置。
-- `AppSettings`：应用名称、开机启动、备份、网卡、GitHub 筛选和功能显示设置。
+- `AppSettings`：应用名称、开机启动、备份、网卡、GitHub 筛选、文件共享和功能显示设置。
 - `FolderRecord` / `FolderTreeNode` / `UnityProjectInfo`：文件夹登记、延迟目录树和 Unity 检测结果。
 - `EventRecord` / `SubTaskRecord` / `ReminderOption`：任务、子任务、截止时间、提醒、归档和重复序列。
 - `CommandRecord` / `CommandLaunchResult`：快捷命令配置和启动结果。
@@ -59,6 +59,7 @@
 - `GitHubTrendingService`：调用 GitHub Search API，默认每次取 30 个仓库，记录限额及前后快照差异。
 - `TranslationService`：调用 MyMemory，将 UTF-8 文本按 450 字节分段翻译并缓存结果。
 - `SystemNetworkService`：读取系统与网卡信息，检测互联网、公网 IP，并通过提权 PowerShell/netsh 应用 IPv4 设置。
+- `LocalFileShareService`：在 WPF 进程内托管 ASP.NET Core 文件共享服务，负责启动、停止、日志和局域网访问地址发现。
 
 ### 局域网文件共享服务
 
@@ -66,6 +67,7 @@
 - `JuDianFileShare.Server/Services/FileStore.cs`：随机存储文件名、路径隔离、流式大小限制、SHA-256、JSON 原子索引及并发串行化。
 - `JuDianFileShare.Server/wwwroot`：无需前端框架的浏览器界面，提供登录、拖拽上传、进度、列表、搜索、下载和删除确认。
 - `JuDianFileShare.Server/appsettings.json`：监听地址、共享目录、访问密码和单文件大小限制。默认密码只用于首次启动，正式使用前必须修改。
+- 桌面程序左侧“文件共享”页面复用同一套服务与静态网页；端口、密码、目录及入口显示状态保存在 `AppSettings`。
 - `JuDianFileShare.Tests`：文件存储层的离线功能测试。
 
 ## 关键行为与约束
@@ -128,7 +130,7 @@
 - Unity 子目录识别、Editor 版本读取和结果持久化
 - 三个模块的快捷筛选、固定状态、排序和持久化
 - 任务保存、归档、恢复、标签、提醒去重、子任务和重复任务
-- 设置、应用名称、功能显示和默认网卡持久化
+- 设置、应用名称、功能显示、文件共享配置和默认网卡持久化，以及版本 7 数据迁移
 - DHCP/静态 IPv4 参数校验和系统快照基础信息
 - GitHub 排名变化、缓存、搜索及翻译缓存
 - 命令校验、分类、搜索、工作目录、执行记录和删除

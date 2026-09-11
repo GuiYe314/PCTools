@@ -15,4 +15,8 @@ public sealed class AppSettings
     public bool ShowCommandCenter { get; set; } = true;
     public bool ShowGitHubTrending { get; set; } = true;
     public bool ShowSystemNetwork { get; set; } = true;
+    public bool ShowFileShare { get; set; } = true;
+    public int FileSharePort { get; set; } = 5080;
+    public string FileSharePassword { get; set; } = "change-me-now";
+    public string FileShareStoragePath { get; set; } = string.Empty;
 }

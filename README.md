@@ -50,7 +50,7 @@ PCTools/
 - 日志：`%LOCALAPPDATA%\JuDianWorkbench\Logs\app-YYYYMMDD.log`
 - 恢复前副本：`%LOCALAPPDATA%\JuDianWorkbench\data.json.before-restore`
 
-当前数据结构版本为 `7`。持久化使用临时文件加替换的方式完成原子写入。
+当前数据结构版本为 `8`。持久化使用临时文件加替换的方式完成原子写入。
 
 ## 构建与运行
 
@@ -72,7 +72,9 @@ dotnet run --project .\JuDianFileShare.Tests\JuDianFileShare.Tests.csproj
 
 ## 启动局域网文件共享
 
-先修改 `JuDianFileShare.Server/appsettings.json` 中的 `FileShare:AccessPassword`，再运行：
+推荐启动桌面程序，在左侧选择“文件共享”，设置端口、访问密码和保存目录后单击“启动共享”。页面会列出同一局域网设备可访问的地址；Windows 防火墙首次询问时需要允许专用网络访问。
+
+也可以不启动桌面程序，单独运行服务。先修改 `JuDianFileShare.Server/appsettings.json` 中的 `FileShare:AccessPassword`，再运行：
 
 ```powershell
 dotnet run --project .\JuDianFileShare.Server\JuDianFileShare.Server.csproj

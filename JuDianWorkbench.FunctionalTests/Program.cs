@@ -9,6 +9,14 @@ var dataFile = Path.Combine(testRoot, "data.json");
 
 try
 {
+    var legacyDataFile = Path.Combine(testRoot, "legacy-data.json");
+    await File.WriteAllTextAsync(legacyDataFile, """{"SchemaVersion":7,"Settings":{"ApplicationName":"旧版工作台"}}""");
+    var migratedLegacy = new MainViewModel(new JsonDataStore(legacyDataFile));
+    Assert(migratedLegacy.Settings.ShowFileShare, "旧版数据迁移后未默认显示文件共享");
+    Assert(migratedLegacy.Settings.FileSharePort == 5080 && migratedLegacy.Settings.FileSharePassword == "change-me-now", "旧版数据迁移后文件共享默认配置错误");
+    using (var migratedDocument = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(legacyDataFile)))
+        Assert(migratedDocument.RootElement.GetProperty("SchemaVersion").GetInt32() == 8, "旧版数据没有迁移到结构版本 8");
+
     var first = new MainViewModel(new JsonDataStore(dataFile));
     var folder = new FolderRecord { Name = "收藏测试", Path = managedFolder, Purpose = "测试" };
     Assert(first.SaveFolder(folder) is null, "新增文件夹失败");
@@ -114,11 +122,17 @@ try
     afterRestoreRestart.Settings.ShowDashboard = false;
     afterRestoreRestart.Settings.ShowCommandCenter = false;
     afterRestoreRestart.Settings.ShowGitHubTrending = false;
+    afterRestoreRestart.Settings.ShowFileShare = false;
+    afterRestoreRestart.Settings.FileSharePort = 6090;
+    afterRestoreRestart.Settings.FileSharePassword = "test-password";
+    afterRestoreRestart.Settings.FileShareStoragePath = Path.Combine(testRoot, "SharedFiles");
     afterRestoreRestart.SaveSettings();
     var afterSettingsRestart = new MainViewModel(new JsonDataStore(dataFile));
     Assert(afterSettingsRestart.Settings.SelectedNetworkAdapterName == "测试网卡", "默认网卡没有持久化");
     Assert(afterSettingsRestart.Settings.ApplicationName == "研发工具台", "软件名称没有持久化");
-    Assert(!afterSettingsRestart.Settings.ShowDashboard && !afterSettingsRestart.Settings.ShowCommandCenter && !afterSettingsRestart.Settings.ShowGitHubTrending, "功能显示设置没有持久化");
+    Assert(!afterSettingsRestart.Settings.ShowDashboard && !afterSettingsRestart.Settings.ShowCommandCenter && !afterSettingsRestart.Settings.ShowGitHubTrending && !afterSettingsRestart.Settings.ShowFileShare, "功能显示设置没有持久化");
+    Assert(afterSettingsRestart.Settings.FileSharePort == 6090 && afterSettingsRestart.Settings.FileSharePassword == "test-password" &&
+           afterSettingsRestart.Settings.FileShareStoragePath == Path.Combine(testRoot, "SharedFiles"), "文件共享配置没有持久化");
     var validStaticIp = new IpConfigurationRequest
     {
         AdapterName = "测试网卡", UseDhcp = false, IpAddress = "192.168.10.20",

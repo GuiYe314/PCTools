@@ -598,7 +598,7 @@ public sealed class MainViewModel : ObservableObject
 
     private void MigrateEventsToTasks()
     {
-        var changed = _data.Events.RemoveAll(x => x.IsSystemLog) > 0 || _data.SchemaVersion < 7;
+        var changed = _data.Events.RemoveAll(x => x.IsSystemLog) > 0 || _data.SchemaVersion < 8;
         _data.GitHubTrendSnapshots ??= [];
         _data.Commands ??= [];
         _data.QuickFilters ??= [];
@@ -622,6 +622,8 @@ public sealed class MainViewModel : ObservableObject
         }
         if (_data.Settings.GitHubTrendPeriodDays is not (7 or 30 or 90)) { _data.Settings.GitHubTrendPeriodDays = 7; changed = true; }
         if (!GitHubLanguages.Contains(_data.Settings.GitHubTrendLanguage)) { _data.Settings.GitHubTrendLanguage = "全部语言"; changed = true; }
+        if (_data.Settings.FileSharePort is < 1024 or > 65535) { _data.Settings.FileSharePort = 5080; changed = true; }
+        if (string.IsNullOrWhiteSpace(_data.Settings.FileSharePassword)) { _data.Settings.FileSharePassword = "change-me-now"; changed = true; }
         foreach (var task in _data.Events)
         {
             task.SubTasks ??= [];
@@ -634,7 +636,7 @@ public sealed class MainViewModel : ObservableObject
                 changed = true;
             }
         }
-        if (_data.SchemaVersion < 7) _data.SchemaVersion = 7;
+        if (_data.SchemaVersion < 8) _data.SchemaVersion = 8;
         if (changed) _store.Save(_data);
     }
 

@@ -23,6 +23,8 @@ public partial class MainWindow : Window
     private readonly TranslationService _translationService = new();
     private readonly CommandExecutionService _commandExecutionService = new();
     private readonly UnityProjectService _unityProjectService = new();
+    private readonly LocalFileShareService _fileShareService = new();
+    private IReadOnlyList<string> _fileShareUrls = [];
     private bool _systemNetworkLoaded;
     private bool _gitHubInitialCheckAttempted;
     private MainViewModel ViewModel => (MainViewModel)DataContext;
@@ -31,6 +33,11 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = new MainViewModel();
+        if (string.IsNullOrWhiteSpace(ViewModel.Settings.FileShareStoragePath))
+            ViewModel.Settings.FileShareStoragePath = LocalFileShareService.DefaultStoragePath;
+        FileSharePortTextBox.Text = ViewModel.Settings.FileSharePort.ToString(CultureInfo.InvariantCulture);
+        FileSharePasswordBox.Password = ViewModel.Settings.FileSharePassword;
+        FileShareStoragePathTextBox.Text = ViewModel.Settings.FileShareStoragePath;
         ApplyApplicationIdentity();
         ViewModel.Settings.StartWithWindows = AutoStartService.IsEnabled();
         TryCreateDailyBackup();
@@ -44,6 +51,7 @@ public partial class MainWindow : Window
             if (GitHubPage.Visibility == Visibility.Visible) ViewModel.GitHubProjectSearch = GlobalSearchBox.Text;
         };
         Loaded += (_, _) => ApplyFeatureVisibility();
+        Closed += async (_, _) => await _fileShareService.StopAsync();
         AppLogger.Info("应用启动");
     }
 
@@ -55,6 +63,7 @@ public partial class MainWindow : Window
         EventsPage.Visibility = button.Tag?.ToString() == "Events" ? Visibility.Visible : Visibility.Collapsed;
         CommandsPage.Visibility = button.Tag?.ToString() == "Commands" ? Visibility.Visible : Visibility.Collapsed;
         GitHubPage.Visibility = button.Tag?.ToString() == "GitHub" ? Visibility.Visible : Visibility.Collapsed;
+        FileSharePage.Visibility = button.Tag?.ToString() == "FileShare" ? Visibility.Visible : Visibility.Collapsed;
         SystemNetworkPage.Visibility = button.Tag?.ToString() == "SystemNetwork" ? Visibility.Visible : Visibility.Collapsed;
         SettingsPage.Visibility = button.Tag?.ToString() == "Settings" ? Visibility.Visible : Visibility.Collapsed;
         GlobalSearchBox.Text = string.Empty;
@@ -359,7 +368,7 @@ public partial class MainWindow : Window
     private void QuickEvent_Click(object sender, RoutedEventArgs e)
     {
         EventsPage.Visibility = Visibility.Visible;
-        DashboardPage.Visibility = FoldersPage.Visibility = CommandsPage.Visibility = GitHubPage.Visibility = SystemNetworkPage.Visibility = SettingsPage.Visibility = Visibility.Collapsed;
+        DashboardPage.Visibility = FoldersPage.Visibility = CommandsPage.Visibility = GitHubPage.Visibility = FileSharePage.Visibility = SystemNetworkPage.Visibility = SettingsPage.Visibility = Visibility.Collapsed;
         OpenNewTaskDialog();
     }
 
@@ -602,10 +611,11 @@ public partial class MainWindow : Window
         settings.ShowTaskManagement = dialog.ShowTasks;
         settings.ShowCommandCenter = dialog.ShowCommands;
         settings.ShowGitHubTrending = dialog.ShowGitHub;
+        settings.ShowFileShare = dialog.ShowFileShare;
         settings.ShowSystemNetwork = dialog.ShowSystemNetwork;
         ViewModel.SaveSettings();
         ApplyFeatureVisibility();
-        AppLogger.Info($"更新功能显示：工作台={settings.ShowDashboard}，文件夹={settings.ShowFolderManagement}，任务={settings.ShowTaskManagement}，命令中心={settings.ShowCommandCenter}，GitHub={settings.ShowGitHubTrending}，系统网络={settings.ShowSystemNetwork}");
+        AppLogger.Info($"更新功能显示：工作台={settings.ShowDashboard}，文件夹={settings.ShowFolderManagement}，任务={settings.ShowTaskManagement}，命令中心={settings.ShowCommandCenter}，GitHub={settings.ShowGitHubTrending}，文件共享={settings.ShowFileShare}，系统网络={settings.ShowSystemNetwork}");
         StatusText.Text = "左侧功能面板已更新";
     }
 
@@ -628,10 +638,11 @@ public partial class MainWindow : Window
         TasksNavButton.Visibility = settings.ShowTaskManagement ? Visibility.Visible : Visibility.Collapsed;
         CommandNavButton.Visibility = settings.ShowCommandCenter ? Visibility.Visible : Visibility.Collapsed;
         GitHubNavButton.Visibility = settings.ShowGitHubTrending ? Visibility.Visible : Visibility.Collapsed;
+        FileShareNavButton.Visibility = settings.ShowFileShare ? Visibility.Visible : Visibility.Collapsed;
         SystemNetworkNavButton.Visibility = settings.ShowSystemNetwork ? Visibility.Visible : Visibility.Collapsed;
         SettingsNavButton.Visibility = Visibility.Visible;
 
-        var featureButtons = new[] { DashboardNavButton, FoldersNavButton, TasksNavButton, CommandNavButton, GitHubNavButton, SystemNetworkNavButton };
+        var featureButtons = new[] { DashboardNavButton, FoldersNavButton, TasksNavButton, CommandNavButton, GitHubNavButton, FileShareNavButton, SystemNetworkNavButton };
         var checkedButton = featureButtons.Append(SettingsNavButton).FirstOrDefault(x => x.IsChecked == true);
         if (checkedButton?.Visibility != Visibility.Visible)
             (featureButtons.FirstOrDefault(x => x.Visibility == Visibility.Visible) ?? SettingsNavButton).IsChecked = true;
@@ -742,6 +753,93 @@ public partial class MainWindow : Window
     }
 
     private async void RefreshSystemNetwork_Click(object sender, RoutedEventArgs e) => await RefreshSystemNetworkAsync();
+
+    private void BrowseFileShareStorage_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog { Title = "选择共享文件保存目录", Multiselect = false };
+        if (dialog.ShowDialog(this) == true) FileShareStoragePathTextBox.Text = dialog.FolderName;
+    }
+
+    private async void StartFileShare_Click(object sender, RoutedEventArgs e)
+    {
+        if (!int.TryParse(FileSharePortTextBox.Text.Trim(), out var port) || port is < 1024 or > 65535)
+        {
+            ShowInfo("端口必须是 1024 到 65535 之间的数字。");
+            return;
+        }
+        var password = FileSharePasswordBox.Password;
+        if (password.Length < 4)
+        {
+            ShowInfo("访问密码至少需要 4 个字符。");
+            return;
+        }
+        var storagePath = FileShareStoragePathTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(storagePath))
+        {
+            ShowInfo("请选择共享文件保存目录。");
+            return;
+        }
+
+        StartFileShareButton.IsEnabled = false;
+        FileShareStatusText.Text = "正在启动…";
+        try
+        {
+            Directory.CreateDirectory(storagePath);
+            _fileShareUrls = await _fileShareService.StartAsync(port, password, storagePath);
+            ViewModel.Settings.FileSharePort = port;
+            ViewModel.Settings.FileSharePassword = password;
+            ViewModel.Settings.FileShareStoragePath = Path.GetFullPath(storagePath);
+            ViewModel.SaveSettings();
+            FileShareStoragePathTextBox.Text = ViewModel.Settings.FileShareStoragePath;
+            FileShareStatusText.Text = "正在运行";
+            FileShareAddressesText.Text = string.Join(Environment.NewLine, _fileShareUrls);
+            StopFileShareButton.IsEnabled = true;
+            OpenFileShareButton.IsEnabled = true;
+            FileSharePortTextBox.IsEnabled = FileSharePasswordBox.IsEnabled = FileShareStoragePathTextBox.IsEnabled = false;
+            StatusText.Text = $"局域网文件共享已启动，端口 {port}";
+            AppLogger.Info($"启动局域网文件共享：端口={port}，目录={ViewModel.Settings.FileShareStoragePath}");
+        }
+        catch (Exception ex)
+        {
+            StartFileShareButton.IsEnabled = true;
+            FileShareStatusText.Text = "启动失败";
+            FileShareAddressesText.Text = ex.Message;
+            AppLogger.Error("启动局域网文件共享失败", ex);
+            ShowInfo($"文件共享启动失败：{ex.Message}");
+        }
+    }
+
+    private async void StopFileShare_Click(object sender, RoutedEventArgs e)
+    {
+        StopFileShareButton.IsEnabled = false;
+        FileShareStatusText.Text = "正在停止…";
+        try
+        {
+            await _fileShareService.StopAsync();
+            _fileShareUrls = [];
+            FileShareStatusText.Text = "尚未启动";
+            FileShareAddressesText.Text = "启动服务后显示";
+            StartFileShareButton.IsEnabled = true;
+            OpenFileShareButton.IsEnabled = false;
+            FileSharePortTextBox.IsEnabled = FileSharePasswordBox.IsEnabled = FileShareStoragePathTextBox.IsEnabled = true;
+            StatusText.Text = "局域网文件共享已停止";
+            AppLogger.Info("停止局域网文件共享");
+        }
+        catch (Exception ex)
+        {
+            FileShareStatusText.Text = "停止失败";
+            StopFileShareButton.IsEnabled = true;
+            AppLogger.Error("停止局域网文件共享失败", ex);
+            ShowInfo($"文件共享停止失败：{ex.Message}");
+        }
+    }
+
+    private void OpenFileShare_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_fileShareService.IsRunning || !int.TryParse(FileSharePortTextBox.Text, out var port)) return;
+        try { Process.Start(new ProcessStartInfo($"http://localhost:{port}") { UseShellExecute = true }); }
+        catch (Exception ex) { AppLogger.Error("打开文件共享页面失败", ex); ShowInfo("无法打开浏览器。"); }
+    }
 
     private async Task RefreshSystemNetworkAsync()
     {

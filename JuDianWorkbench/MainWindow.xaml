@@ -32,6 +32,7 @@
                     <RadioButton x:Name="TasksNavButton" Style="{StaticResource NavButton}" GroupName="Navigation" Content="☑  任务管理" Tag="Events" Checked="Navigation_Checked"/>
                     <RadioButton x:Name="CommandNavButton" Style="{StaticResource NavButton}" GroupName="Navigation" Content="▶  命令中心" Tag="Commands" Checked="Navigation_Checked"/>
                     <RadioButton x:Name="GitHubNavButton" Style="{StaticResource NavButton}" GroupName="Navigation" Content="⌁  GitHub 热门" Tag="GitHub" Checked="Navigation_Checked"/>
+                    <RadioButton x:Name="FileShareNavButton" Style="{StaticResource NavButton}" GroupName="Navigation" Content="⇅  文件共享" Tag="FileShare" Checked="Navigation_Checked"/>
                     <RadioButton x:Name="SystemNetworkNavButton" Style="{StaticResource NavButton}" GroupName="Navigation" Content="◉  系统与网络" Tag="SystemNetwork" Checked="Navigation_Checked"/>
                 </StackPanel>
                 <RadioButton x:Name="SettingsNavButton" Grid.Row="2" Style="{StaticResource NavButton}" GroupName="Navigation" Content="⚙  设置" Tag="Settings" Checked="Navigation_Checked" Margin="8,3,8,16"/>
@@ -180,6 +181,30 @@
                         </Grid></Border>
                     </Grid>
                 </Grid>
+
+                <ScrollViewer x:Name="FileSharePage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <StackPanel Margin="0,0,0,18"><TextBlock Text="局域网文件共享" FontSize="25" FontWeight="SemiBold"/><TextBlock Text="启动后，同一局域网设备可通过浏览器上传和下载文件" Foreground="{StaticResource MutedBrush}" Margin="0,5,0,0"/></StackPanel>
+                        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="1.1*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="0.9*"/></Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource PanelCard}"><StackPanel>
+                                <TextBlock Text="服务设置" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,14"/>
+                                <TextBlock Text="访问端口" Foreground="{StaticResource MutedBrush}"/><TextBox x:Name="FileSharePortTextBox" Margin="0,5,0,12"/>
+                                <TextBlock Text="访问密码" Foreground="{StaticResource MutedBrush}"/><PasswordBox x:Name="FileSharePasswordBox" Margin="0,5,0,12" ToolTip="至少 4 个字符"/>
+                                <TextBlock Text="共享文件保存目录" Foreground="{StaticResource MutedBrush}"/>
+                                <Grid Margin="0,5,0,14"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="FileShareStoragePathTextBox"/><Button Grid.Column="2" Content="选择…" Click="BrowseFileShareStorage_Click"/></Grid>
+                                <StackPanel Orientation="Horizontal"><Button x:Name="StartFileShareButton" Content="启动文件共享" Style="{StaticResource PrimaryButton}" Click="StartFileShare_Click"/><Button x:Name="StopFileShareButton" Content="停止服务" Click="StopFileShare_Click" Margin="8,0,0,0" IsEnabled="False"/></StackPanel>
+                            </StackPanel></Border>
+                            <Border Grid.Column="2" Style="{StaticResource PanelCard}"><StackPanel>
+                                <TextBlock Text="服务状态" FontSize="17" FontWeight="SemiBold"/>
+                                <TextBlock x:Name="FileShareStatusText" Text="尚未启动" FontSize="22" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" Margin="0,18,0,8"/>
+                                <TextBlock Text="访问地址" Foreground="{StaticResource MutedBrush}" Margin="0,7,0,6"/>
+                                <TextBlock x:Name="FileShareAddressesText" Text="启动服务后显示" TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas"/>
+                                <Button x:Name="OpenFileShareButton" Content="在本机浏览器打开" Click="OpenFileShare_Click" Margin="0,18,0,0" HorizontalAlignment="Left" IsEnabled="False"/>
+                                <TextBlock Text="首次从其他设备访问失败时，请允许 Windows 防火墙中的专用网络访问。当前服务仅适合可信局域网，不要映射到公网。" Foreground="#B56A25" TextWrapping="Wrap" Margin="0,18,0,0"/>
+                            </StackPanel></Border>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
 
                 <ScrollViewer x:Name="SystemNetworkPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
