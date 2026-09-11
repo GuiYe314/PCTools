@@ -372,6 +372,14 @@ public partial class MainWindow : Window
         OpenNewTaskDialog();
     }
 
+    private void NavigateToFeature_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: string target }) return;
+        var button = new[] { DashboardNavButton, FoldersNavButton, TasksNavButton, CommandNavButton, GitHubNavButton, FileShareNavButton, SystemNetworkNavButton }
+            .FirstOrDefault(x => string.Equals(x.Tag?.ToString(), target, StringComparison.Ordinal));
+        if (button?.Visibility == Visibility.Visible) button.IsChecked = true;
+    }
+
     private void SaveEvent_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel.SelectedEvent is null) { ShowInfo("请先新建或选择一个事件。"); return; }

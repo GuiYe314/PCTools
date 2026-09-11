@@ -13,7 +13,7 @@
     </Window.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="205"/>
+            <ColumnDefinition Width="224"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
@@ -26,15 +26,20 @@
                     </Border>
                     <TextBlock x:Name="ApplicationNameText" Text="聚点工作台" Foreground="White" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Margin="11,0,0,0" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
-                <StackPanel Grid.Row="1">
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
                     <RadioButton x:Name="DashboardNavButton" Style="{StaticResource NavButton}" GroupName="Navigation" Content="▦  工作台" Tag="Dashboard" Checked="Navigation_Checked" IsChecked="True"/>
+                    <TextBlock Text="个人管理" Foreground="#71809A" FontSize="11" FontWeight="SemiBold" Margin="22,16,0,5"/>
                     <RadioButton x:Name="FoldersNavButton" Style="{StaticResource NavButton}" GroupName="Navigation" Content="▣  文件夹管理" Tag="Folders" Checked="Navigation_Checked"/>
                     <RadioButton x:Name="TasksNavButton" Style="{StaticResource NavButton}" GroupName="Navigation" Content="☑  任务管理" Tag="Events" Checked="Navigation_Checked"/>
+                    <TextBlock Text="工具" Foreground="#71809A" FontSize="11" FontWeight="SemiBold" Margin="22,16,0,5"/>
                     <RadioButton x:Name="CommandNavButton" Style="{StaticResource NavButton}" GroupName="Navigation" Content="▶  命令中心" Tag="Commands" Checked="Navigation_Checked"/>
-                    <RadioButton x:Name="GitHubNavButton" Style="{StaticResource NavButton}" GroupName="Navigation" Content="⌁  GitHub 热门" Tag="GitHub" Checked="Navigation_Checked"/>
                     <RadioButton x:Name="FileShareNavButton" Style="{StaticResource NavButton}" GroupName="Navigation" Content="⇅  文件共享" Tag="FileShare" Checked="Navigation_Checked"/>
                     <RadioButton x:Name="SystemNetworkNavButton" Style="{StaticResource NavButton}" GroupName="Navigation" Content="◉  系统与网络" Tag="SystemNetwork" Checked="Navigation_Checked"/>
+                    <TextBlock Text="发现" Foreground="#71809A" FontSize="11" FontWeight="SemiBold" Margin="22,16,0,5"/>
+                    <RadioButton x:Name="GitHubNavButton" Style="{StaticResource NavButton}" GroupName="Navigation" Content="⌁  GitHub 热门" Tag="GitHub" Checked="Navigation_Checked"/>
                 </StackPanel>
+                </ScrollViewer>
                 <RadioButton x:Name="SettingsNavButton" Grid.Row="2" Style="{StaticResource NavButton}" GroupName="Navigation" Content="⚙  设置" Tag="Settings" Checked="Navigation_Checked" Margin="8,3,8,16"/>
             </Grid>
         </Border>
@@ -53,20 +58,30 @@
             </Border>
 
             <Grid Grid.Row="1" Margin="24">
-                <Grid x:Name="DashboardPage">
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                    <StackPanel Margin="0,0,0,20"><TextBlock Text="工作台" FontSize="25" FontWeight="SemiBold"/><TextBlock Text="文件夹与任务概览" Foreground="{StaticResource MutedBrush}" Margin="0,5,0,0"/></StackPanel>
-                    <UniformGrid Grid.Row="1" Columns="4" Margin="0,0,0,18">
-                        <Border Style="{StaticResource PanelCard}" Margin="0,0,12,0"><StackPanel><TextBlock Text="已管理文件夹" Foreground="{StaticResource MutedBrush}"/><TextBlock Text="{Binding FolderCount}" FontSize="28" Margin="0,8,0,0"/></StackPanel></Border>
-                        <Border Style="{StaticResource PanelCard}" Margin="0,0,12,0"><StackPanel><TextBlock Text="收藏文件夹" Foreground="{StaticResource MutedBrush}"/><TextBlock Text="{Binding FavoriteFolderCount}" FontSize="28" Margin="0,8,0,0"/></StackPanel></Border>
-                        <Border Style="{StaticResource PanelCard}" Margin="0,0,12,0"><StackPanel><TextBlock Text="路径失效" Foreground="{StaticResource MutedBrush}"/><TextBlock Text="{Binding InvalidFolderCount}" FontSize="28" Margin="0,8,0,0"/></StackPanel></Border>
-                        <Border Style="{StaticResource PanelCard}"><StackPanel><TextBlock Text="任务总数" Foreground="{StaticResource MutedBrush}"/><TextBlock Text="{Binding EventCount}" FontSize="28" Margin="0,8,0,0"/></StackPanel></Border>
-                    </UniformGrid>
-                    <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <Border Style="{StaticResource PanelCard}"><DockPanel><TextBlock DockPanel.Dock="Top" Text="收藏文件夹" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,12"/><ListBox ItemsSource="{Binding FavoriteFolders}" BorderThickness="0" Background="Transparent"><ListBox.ItemTemplate><DataTemplate><Grid Margin="0,7"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="{Binding Name}" FontWeight="SemiBold"/><TextBlock Text="{Binding Path}" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/></StackPanel><StackPanel Grid.Column="1" Orientation="Horizontal"><Button Content="取消收藏" Tag="{Binding}" Click="ToggleFolderFavorite_Click" Padding="10,5" VerticalAlignment="Center"/><Button Content="打开文件夹" Tag="{Binding}" Click="OpenFolderFromList_Click" Padding="10,5" Margin="8,0,0,0" VerticalAlignment="Center"/><Button Content="打开 Unity" Tag="{Binding}" Click="OpenUnityProject_Click" Padding="10,5" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="{Binding HasUnityProjects, Converter={StaticResource BoolToVisibility}}"/></StackPanel></Grid></DataTemplate></ListBox.ItemTemplate></ListBox></DockPanel></Border>
-                        <Border Grid.Column="2" Style="{StaticResource PanelCard}"><DockPanel><TextBlock DockPanel.Dock="Top" Text="最近任务" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,12"/><ListBox ItemsSource="{Binding Events}" BorderThickness="0" Background="Transparent"><ListBox.ItemTemplate><DataTemplate><Grid Margin="0,7"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="{Binding Title}" FontWeight="SemiBold"/><TextBlock Text="{Binding PlannedDateTimeText}" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,3,0,0"/></StackPanel><TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/></Grid></DataTemplate></ListBox.ItemTemplate></ListBox></DockPanel></Border>
-                    </Grid>
-                </Grid>
+                <ScrollViewer x:Name="DashboardPage" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,18"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="工作台" FontSize="27" FontWeight="SemiBold"/><TextBlock Text="继续手头工作，或快速启动常用功能" Foreground="{StaticResource MutedBrush}" Margin="0,5,0,0"/></StackPanel><TextBlock Grid.Column="1" Text="本地优先 · 数据保存在此电脑" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/></Grid>
+                        <UniformGrid Columns="4" Margin="0,0,0,18">
+                            <Button Content="＋  新建任务" Style="{StaticResource DashboardActionButton}" Click="QuickEvent_Click" Margin="0,0,10,0"/>
+                            <Button Content="▣  添加文件夹" Style="{StaticResource DashboardActionButton}" Click="NewFolder_Click" Margin="0,0,10,0"/>
+                            <Button Content="▶  添加命令" Style="{StaticResource DashboardActionButton}" Click="NewCommand_Click" Margin="0,0,10,0"/>
+                            <Button Content="⇅  文件共享" Style="{StaticResource DashboardActionButton}" Tag="FileShare" Click="NavigateToFeature_Click"/>
+                        </UniformGrid>
+                        <UniformGrid Columns="4" Margin="0,0,0,18">
+                            <Border Style="{StaticResource MetricCard}" Margin="0,0,10,0"><StackPanel><TextBlock Text="待管理任务" Foreground="{StaticResource MutedBrush}"/><TextBlock Text="{Binding EventCount}" FontSize="27" FontWeight="SemiBold" Margin="0,7,0,0"/><TextBlock Text="查看任务计划" Foreground="{StaticResource AccentBrush}" FontSize="12" Margin="0,5,0,0"/></StackPanel></Border>
+                            <Border Style="{StaticResource MetricCard}" Margin="0,0,10,0"><StackPanel><TextBlock Text="收藏文件夹" Foreground="{StaticResource MutedBrush}"/><TextBlock Text="{Binding FavoriteFolderCount}" FontSize="27" FontWeight="SemiBold" Margin="0,7,0,0"/><TextBlock Text="随时快速打开" Foreground="{StaticResource AccentBrush}" FontSize="12" Margin="0,5,0,0"/></StackPanel></Border>
+                            <Border Style="{StaticResource MetricCard}" Margin="0,0,10,0"><StackPanel><TextBlock Text="快捷命令" Foreground="{StaticResource MutedBrush}"/><TextBlock Text="{Binding CommandCount}" FontSize="27" FontWeight="SemiBold" Margin="0,7,0,0"/><TextBlock Text="保存的一键操作" Foreground="{StaticResource AccentBrush}" FontSize="12" Margin="0,5,0,0"/></StackPanel></Border>
+                            <Border Style="{StaticResource MetricCard}"><StackPanel><TextBlock Text="GitHub 榜单" Foreground="{StaticResource MutedBrush}"/><TextBlock Text="{Binding GitHubTrendCount}" FontSize="27" FontWeight="SemiBold" Margin="0,7,0,0"/><TextBlock Text="近期热门项目" Foreground="{StaticResource AccentBrush}" FontSize="12" Margin="0,5,0,0"/></StackPanel></Border>
+                        </UniformGrid>
+                        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="1.12*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="0.88*"/></Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource PanelCard}"><DockPanel><Grid DockPanel.Dock="Top" Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="继续工作" FontSize="17" FontWeight="SemiBold"/><Button Grid.Column="1" Content="查看全部任务" Tag="Events" Click="NavigateToFeature_Click" Padding="10,5"/></Grid><ListBox ItemsSource="{Binding Events}" MaxHeight="260" BorderThickness="0" Background="Transparent"><ListBox.ItemTemplate><DataTemplate><Grid Margin="0,7"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding PlannedDateTimeText}" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,3,0,0"/></StackPanel><Border Grid.Column="1" Background="#EEF3FF" CornerRadius="8" Padding="8,4" VerticalAlignment="Center"><TextBlock Text="{Binding Status}" Foreground="{StaticResource AccentBrush}" FontSize="12"/></Border></Grid></DataTemplate></ListBox.ItemTemplate></ListBox></DockPanel></Border>
+                            <StackPanel Grid.Column="2">
+                                <Border Style="{StaticResource PanelCard}" Margin="0,0,0,12"><StackPanel><TextBlock Text="运行状态" FontSize="17" FontWeight="SemiBold"/><Grid Margin="0,14,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="局域网文件共享"/><TextBlock Grid.Column="1" Text="{Binding Text, ElementName=FileShareStatusText}" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold"/></Grid><Grid Margin="0,10,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="文件夹路径"/><TextBlock Grid.Column="1" Text="{Binding InvalidFolderCount, StringFormat={}{0} 个失效}" Foreground="#B56A25"/></Grid><Grid Margin="0,10,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="数据存储"/><TextBlock Grid.Column="1" Text="本机" Foreground="#27835E" FontWeight="SemiBold"/></Grid></StackPanel></Border>
+                                <Border Style="{StaticResource PanelCard}"><DockPanel><Grid DockPanel.Dock="Top" Margin="0,0,0,10"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="常用文件夹" FontSize="17" FontWeight="SemiBold"/><Button Grid.Column="1" Content="文件夹管理" Tag="Folders" Click="NavigateToFeature_Click" Padding="10,5"/></Grid><ListBox ItemsSource="{Binding FavoriteFolders}" MaxHeight="150" BorderThickness="0" Background="Transparent"><ListBox.ItemTemplate><DataTemplate><Grid Margin="0,6"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="{Binding Name}" FontWeight="SemiBold"/><TextBlock Text="{Binding Path}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextTrimming="CharacterEllipsis"/></StackPanel><Button Grid.Column="1" Content="打开" Tag="{Binding}" Click="OpenFolderFromList_Click" Padding="9,4"/></Grid></DataTemplate></ListBox.ItemTemplate></ListBox></DockPanel></Border>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
 
                 <Grid x:Name="FoldersPage" Visibility="Collapsed">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
