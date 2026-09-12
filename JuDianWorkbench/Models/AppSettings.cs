@@ -4,6 +4,8 @@ public sealed class AppSettings
 {
     public string ApplicationName { get; set; } = "聚点工作台";
     public bool StartWithWindows { get; set; }
+    public bool EnableShowWindowHotkey { get; set; }
+    public string ShowWindowHotkey { get; set; } = "Ctrl + Alt + J";
     public bool AutoBackupEnabled { get; set; } = true;
     public int BackupRetentionCount { get; set; } = 14;
     public string SelectedNetworkAdapterName { get; set; } = string.Empty;

@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     private readonly UnityProjectService _unityProjectService = new();
     private readonly LocalFileShareService _fileShareService = new();
     private readonly WorkModeService _workModeService = new();
+    private readonly GlobalHotkeyService _globalHotkeyService = new();
     private bool _isWorkModeRunning;
     private IReadOnlyList<string> _fileShareUrls = [];
     private bool _systemNetworkLoaded;
@@ -40,6 +41,10 @@ public partial class MainWindow : Window
         FileSharePortTextBox.Text = ViewModel.Settings.FileSharePort.ToString(CultureInfo.InvariantCulture);
         FileSharePasswordBox.Password = ViewModel.Settings.FileSharePassword;
         FileShareStoragePathTextBox.Text = ViewModel.Settings.FileShareStoragePath;
+        EnableShowWindowHotkeyCheckBox.IsChecked = ViewModel.Settings.EnableShowWindowHotkey;
+        ShowWindowHotkeyTextBox.Text = ViewModel.Settings.ShowWindowHotkey;
+        UpdateHotkeyEditorState();
+        HotkeyStatusText.Text = ViewModel.Settings.EnableShowWindowHotkey ? "等待注册快捷键" : "尚未启用";
         ApplyApplicationIdentity();
         ViewModel.Settings.StartWithWindows = AutoStartService.IsEnabled();
         TryCreateDailyBackup();
@@ -52,8 +57,13 @@ public partial class MainWindow : Window
             if (CommandsPage.Visibility == Visibility.Visible) ViewModel.CommandSearch = GlobalSearchBox.Text;
             if (GitHubPage.Visibility == Visibility.Visible) ViewModel.GitHubProjectSearch = GlobalSearchBox.Text;
         };
+        SourceInitialized += (_, _) => InitializeGlobalHotkey();
         Loaded += (_, _) => ApplyFeatureVisibility();
-        Closed += async (_, _) => await _fileShareService.StopAsync();
+        Closed += async (_, _) =>
+        {
+            _globalHotkeyService.Dispose();
+            await _fileShareService.StopAsync();
+        };
         AppLogger.Info("应用启动");
     }
 
@@ -1166,6 +1176,127 @@ public partial class MainWindow : Window
             StartupStatusText.Text = "保存失败，请查看运行日志。";
             ShowInfo("无法修改开机启动设置，详细信息已写入日志。");
         }
+    }
+
+    private void InitializeGlobalHotkey()
+    {
+        try
+        {
+            _globalHotkeyService.Attach(this, ShowMainWindowFromHotkey);
+            if (!ViewModel.Settings.EnableShowWindowHotkey)
+            {
+                HotkeyStatusText.Text = "尚未启用";
+                return;
+            }
+            if (_globalHotkeyService.TryRegister(ViewModel.Settings.ShowWindowHotkey, out var error))
+            {
+                HotkeyStatusText.Text = $"已启用：{ViewModel.Settings.ShowWindowHotkey}";
+                AppLogger.Info($"注册软件显示快捷键：{ViewModel.Settings.ShowWindowHotkey}");
+            }
+            else
+            {
+                HotkeyStatusText.Text = error ?? "快捷键注册失败";
+                AppLogger.Error($"注册软件显示快捷键失败：{ViewModel.Settings.ShowWindowHotkey}，{error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            HotkeyStatusText.Text = "快捷键服务初始化失败，请查看运行日志。";
+            AppLogger.Error("初始化全局快捷键服务失败", ex);
+        }
+    }
+
+    private void ShowMainWindowFromHotkey()
+    {
+        if (!IsVisible) Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+        var wasTopmost = Topmost;
+        Topmost = true;
+        Topmost = wasTopmost;
+        Focus();
+        StatusText.Text = "已通过全局快捷键显示软件";
+    }
+
+    private void HotkeyEnabled_Changed(object sender, RoutedEventArgs e)
+    {
+        if (ShowWindowHotkeyTextBox is null || HotkeyStatusText is null) return;
+        UpdateHotkeyEditorState();
+        HotkeyStatusText.Text = EnableShowWindowHotkeyCheckBox.IsChecked == true
+            ? "单击输入框并按下新的组合键，然后保存。"
+            : "保存后将关闭全局快捷键。";
+    }
+
+    private void UpdateHotkeyEditorState() =>
+        ShowWindowHotkeyTextBox.IsEnabled = EnableShowWindowHotkeyCheckBox.IsChecked == true;
+
+    private void ShowWindowHotkey_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        HotkeyStatusText.Text = "现在按下组合键；按 Esc 可以清除。";
+        ShowWindowHotkeyTextBox.SelectAll();
+    }
+
+    private void ShowWindowHotkey_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        e.Handled = true;
+        var key = e.Key switch
+        {
+            Key.System => e.SystemKey,
+            Key.ImeProcessed => e.ImeProcessedKey,
+            Key.DeadCharProcessed => e.DeadCharProcessedKey,
+            _ => e.Key
+        };
+        if (key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None)
+        {
+            ShowWindowHotkeyTextBox.Clear();
+            HotkeyStatusText.Text = "快捷键已清除；关闭启用开关后可以保存。";
+            return;
+        }
+        if (!GlobalHotkeyService.TryCreateGesture(Keyboard.Modifiers, key, out var gesture, out var error))
+        {
+            HotkeyStatusText.Text = error ?? "无法使用这个组合键。";
+            return;
+        }
+        ShowWindowHotkeyTextBox.Text = gesture;
+        ShowWindowHotkeyTextBox.CaretIndex = gesture.Length;
+        HotkeyStatusText.Text = $"已录入 {gesture}，点击“保存快捷键”后生效。";
+    }
+
+    private void SaveHotkeySettings_Click(object sender, RoutedEventArgs e)
+    {
+        var enabled = EnableShowWindowHotkeyCheckBox.IsChecked == true;
+        var gesture = ShowWindowHotkeyTextBox.Text.Trim();
+        if (enabled)
+        {
+            if (!GlobalHotkeyService.TryNormalizeGesture(gesture, out var normalized, out var validationError))
+            {
+                HotkeyStatusText.Text = validationError ?? "快捷键无效。";
+                ShowInfo(HotkeyStatusText.Text);
+                return;
+            }
+            gesture = normalized;
+            if (!_globalHotkeyService.TryRegister(gesture, out var registrationError))
+            {
+                ShowWindowHotkeyTextBox.Text = ViewModel.Settings.ShowWindowHotkey;
+                HotkeyStatusText.Text = $"{registrationError ?? "快捷键注册失败。"} 当前设置未改变。";
+                AppLogger.Error($"保存软件显示快捷键失败：{gesture}，{registrationError}");
+                ShowInfo(HotkeyStatusText.Text);
+                return;
+            }
+        }
+        else
+        {
+            _globalHotkeyService.Unregister();
+            if (!GlobalHotkeyService.TryNormalizeGesture(gesture, out gesture, out _)) gesture = "Ctrl + Alt + J";
+        }
+
+        ViewModel.Settings.EnableShowWindowHotkey = enabled;
+        ViewModel.Settings.ShowWindowHotkey = gesture;
+        ViewModel.SaveSettings();
+        ShowWindowHotkeyTextBox.Text = gesture;
+        HotkeyStatusText.Text = enabled ? $"已启用：{gesture}" : "已关闭全局快捷键";
+        StatusText.Text = "软件显示快捷键设置已保存";
+        AppLogger.Info(enabled ? $"设置软件显示快捷键：{gesture}" : "关闭软件显示快捷键");
     }
 
     private void SaveBackupSettings_Click(object sender, RoutedEventArgs e)

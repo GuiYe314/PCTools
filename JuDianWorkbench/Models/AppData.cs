@@ -2,7 +2,7 @@ namespace JuDianWorkbench.Models;
 
 public sealed class AppData
 {
-    public int SchemaVersion { get; set; } = 9;
+    public int SchemaVersion { get; set; } = 10;
     public List<FolderRecord> Folders { get; set; } = [];
     public List<EventRecord> Events { get; set; } = [];
     public List<GitHubTrendSnapshot> GitHubTrendSnapshots { get; set; } = [];

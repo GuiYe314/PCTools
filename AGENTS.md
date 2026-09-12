@@ -16,7 +16,7 @@
 - UI：WPF + XAML
 - 可空引用类型和隐式 using：启用
 - 外部 NuGet 包：当前无
-- 应用数据结构版本：`AppData.SchemaVersion = 9`
+- 应用数据结构版本：`AppData.SchemaVersion = 10`
 - 默认分支：`main`
 
 ## 架构与职责
@@ -40,7 +40,7 @@
 ### 数据模型
 
 - `AppData`：持久化根对象，包含文件夹、任务、程序库、工作模式、GitHub 快照、命令、快捷筛选和设置。
-- `AppSettings`：应用名称、开机启动、备份、网卡、GitHub 筛选、文件共享、工作模式入口和功能显示设置。
+- `AppSettings`：应用名称、开机启动、全局显示快捷键、备份、网卡、GitHub 筛选、文件共享、工作模式入口和功能显示设置。
 - `FolderRecord` / `FolderTreeNode` / `UnityProjectInfo`：文件夹登记、延迟目录树和 Unity 检测结果。
 - `EventRecord` / `SubTaskRecord` / `ReminderOption`：任务、子任务、截止时间、提醒、归档和重复序列。
 - `CommandRecord` / `CommandLaunchResult`：快捷命令配置和启动结果。
@@ -58,6 +58,7 @@
 - `BackupService`：创建、轮换、枚举和恢复应用数据备份；恢复前保留 `.before-restore`。
 - `AppLogger`：写入 `%LOCALAPPDATA%\JuDianWorkbench\Logs`，日志失败不应导致应用崩溃。
 - `AutoStartService`：管理当前用户注册表 `Run` 项。
+- `GlobalHotkeyService`：规范化并校验快捷键，通过 Windows `RegisterHotKey` 注册显示主窗口的全局组合键，并负责冲突恢复和注销。
 - `CommandExecutionService`：校验并启动 CMD、软件或 BAT/CMD；管理员模式触发 UAC。
 - `WorkModeService`：校验程序库与工作模式，按顺序启动 EXE、HTTP/HTTPS 网页或文件夹，并处理重复程序、步骤等待和失败停止策略。
 - `UnityProjectService`：最多向下四层、最多识别 20 个 Unity 项目，并寻找匹配 Editor。
@@ -88,6 +89,7 @@
 - 目录树单节点最多加载 500 项；Unity 搜索跳过 `.git`、`Library`、`Temp`、`obj` 等目录。
 - 静态 IPv4 参数必须在提权前验证；所有系统级修改都必须保留用户确认。
 - 网络调用必须有超时、取消或明确错误反馈，不得阻塞 UI 线程。
+- 软件显示快捷键必须至少包含一个修饰键和一个主按键；注册冲突时不得覆盖已保存设置或丢失当前有效注册，窗口关闭时必须注销。
 - 不得提交 API Key、Token、真实个人数据、`data.json`、日志、备份、`bin` 或 `obj`。
 - 文件共享服务必须把上传文件保存在配置的共享目录内，并使用随机存储名；任何浏览器提供的文件名只能作为显示和下载名称。
 - 文件共享的写操作必须同时通过密码 Cookie 和同源请求头校验；下载、删除和索引查询不得绕过鉴权。
@@ -142,7 +144,8 @@
 - 设置、应用名称、功能显示、文件共享配置和默认网卡持久化，以及版本 7 数据迁移
 - 工作台待办摘要，以及列表新增、筛选、删除后的自动选择行为
 - DHCP/静态 IPv4 参数校验，以及显卡、驱动、主板、BIOS、内存使用、磁盘和运行时长等系统快照信息
-- 程序库的路径/URL 校验、引用删除保护、工作模式顺序与运行记录持久化，以及版本 9 数据迁移
+- 程序库的路径/URL 校验、引用删除保护、工作模式顺序与运行记录持久化
+- 全局显示快捷键的组合校验、规范化、设置持久化，以及版本 10 数据迁移
 - GitHub 排名变化、缓存、搜索及翻译缓存
 - 命令校验、分类、搜索、工作目录、执行记录和删除
 

@@ -1,6 +1,8 @@
 using JuDianWorkbench.Models;
 using JuDianWorkbench.Services;
 using JuDianWorkbench.ViewModels;
+using System.Windows;
+using System.Windows.Interop;
 
 var testRoot = Path.Combine(Path.GetTempPath(), "JuDianWorkbenchTests", Guid.NewGuid().ToString("N"));
 var managedFolder = Path.Combine(testRoot, "ManagedFolder");
@@ -14,9 +16,10 @@ try
     var migratedLegacy = new MainViewModel(new JsonDataStore(legacyDataFile));
     Assert(migratedLegacy.Settings.ShowFileShare, "旧版数据迁移后未默认显示文件共享");
     Assert(migratedLegacy.Settings.ShowWorkModes, "旧版数据迁移后未默认显示工作模式");
+    Assert(!migratedLegacy.Settings.EnableShowWindowHotkey && migratedLegacy.Settings.ShowWindowHotkey == "Ctrl + Alt + J", "旧版数据迁移后的显示快捷键默认值错误");
     Assert(migratedLegacy.Settings.FileSharePort == 5080 && migratedLegacy.Settings.FileSharePassword == "change-me-now", "旧版数据迁移后文件共享默认配置错误");
     using (var migratedDocument = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(legacyDataFile)))
-        Assert(migratedDocument.RootElement.GetProperty("SchemaVersion").GetInt32() == 9, "旧版数据没有迁移到结构版本 9");
+        Assert(migratedDocument.RootElement.GetProperty("SchemaVersion").GetInt32() == 10, "旧版数据没有迁移到结构版本 10");
 
     var first = new MainViewModel(new JsonDataStore(dataFile));
     var folder = new FolderRecord { Name = "收藏测试", Path = managedFolder, Purpose = "测试" };
@@ -127,6 +130,8 @@ try
     afterRestoreRestart.Settings.ShowGitHubTrending = false;
     afterRestoreRestart.Settings.ShowFileShare = false;
     afterRestoreRestart.Settings.ShowWorkModes = false;
+    afterRestoreRestart.Settings.EnableShowWindowHotkey = true;
+    afterRestoreRestart.Settings.ShowWindowHotkey = "Ctrl + Shift + F9";
     afterRestoreRestart.Settings.FileSharePort = 6090;
     afterRestoreRestart.Settings.FileSharePassword = "test-password";
     afterRestoreRestart.Settings.FileShareStoragePath = Path.Combine(testRoot, "SharedFiles");
@@ -135,6 +140,7 @@ try
     Assert(afterSettingsRestart.Settings.SelectedNetworkAdapterName == "测试网卡", "默认网卡没有持久化");
     Assert(afterSettingsRestart.Settings.ApplicationName == "研发工具台", "软件名称没有持久化");
     Assert(!afterSettingsRestart.Settings.ShowDashboard && !afterSettingsRestart.Settings.ShowCommandCenter && !afterSettingsRestart.Settings.ShowGitHubTrending && !afterSettingsRestart.Settings.ShowFileShare && !afterSettingsRestart.Settings.ShowWorkModes, "功能显示设置没有持久化");
+    Assert(afterSettingsRestart.Settings.EnableShowWindowHotkey && afterSettingsRestart.Settings.ShowWindowHotkey == "Ctrl + Shift + F9", "软件显示快捷键设置没有持久化");
     Assert(afterSettingsRestart.Settings.FileSharePort == 6090 && afterSettingsRestart.Settings.FileSharePassword == "test-password" &&
            afterSettingsRestart.Settings.FileShareStoragePath == Path.Combine(testRoot, "SharedFiles"), "文件共享配置没有持久化");
     var validStaticIp = new IpConfigurationRequest
@@ -150,6 +156,30 @@ try
     };
     Assert(SystemNetworkService.ValidateIpConfiguration(invalidMask) is not null, "不连续子网掩码未被拦截");
     Assert(SystemNetworkService.ValidateIpConfiguration(new IpConfigurationRequest { AdapterName = "测试网卡", UseDhcp = true }) is null, "DHCP 配置被错误拒绝");
+    Assert(GlobalHotkeyService.TryNormalizeGesture("alt+ctrl+j", out var normalizedHotkey, out _) && normalizedHotkey == "Ctrl + Alt + J", "全局快捷键规范化错误");
+    Assert(!GlobalHotkeyService.TryNormalizeGesture("J", out _, out _), "没有修饰键的全局快捷键未被拦截");
+    Assert(!GlobalHotkeyService.TryNormalizeGesture("Ctrl + Alt", out _, out _), "没有主按键的全局快捷键未被拦截");
+    Exception? hotkeyRegistrationError = null;
+    var hotkeyThread = new Thread(() =>
+    {
+        try
+        {
+            var testWindow = new Window();
+            _ = new WindowInteropHelper(testWindow).EnsureHandle();
+            using var hotkeyService = new GlobalHotkeyService();
+            hotkeyService.Attach(testWindow, () => { });
+            Assert(hotkeyService.TryRegister("Ctrl + Alt + Shift + F24", out var registrationError), $"Windows 全局快捷键注册失败：{registrationError}");
+            Assert(hotkeyService.IsRegistered, "全局快捷键注册状态错误");
+            hotkeyService.Unregister();
+            Assert(!hotkeyService.IsRegistered, "全局快捷键没有正确注销");
+            testWindow.Close();
+        }
+        catch (Exception ex) { hotkeyRegistrationError = ex; }
+    });
+    hotkeyThread.SetApartmentState(ApartmentState.STA);
+    hotkeyThread.Start();
+    hotkeyThread.Join();
+    if (hotkeyRegistrationError is not null) throw new InvalidOperationException("Windows 全局快捷键系统调用测试失败。", hotkeyRegistrationError);
     var systemSnapshot = await new SystemNetworkService().GetSnapshotAsync(includePublicInfo: false);
     Assert(!string.IsNullOrWhiteSpace(systemSnapshot.ComputerName), "计算机名读取失败");
     Assert(!string.IsNullOrWhiteSpace(systemSnapshot.OperatingSystem), "操作系统信息读取失败");
@@ -316,7 +346,7 @@ try
         var translated = await new TranslationService().TranslateToChineseAsync("A fast and lightweight desktop productivity tool.");
         Assert(!string.IsNullOrWhiteSpace(translated) && translated != "A fast and lightweight desktop productivity tool.", "真实翻译接口返回无效");
     }
-    Console.WriteLine("PASS: 文件夹读取、Unity 项目识别、工作模式、程序库、硬件详情、通用快捷筛选标签、任务、命令中心、GitHub 热门检测、提醒、备份、默认网卡和 IP 参数校验全部通过。");
+    Console.WriteLine("PASS: 文件夹读取、Unity 项目识别、工作模式、程序库、全局显示快捷键、硬件详情、通用快捷筛选标签、任务、命令中心、GitHub 热门检测、提醒、备份、默认网卡和 IP 参数校验全部通过。");
 }
 finally
 {

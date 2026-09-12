@@ -66,7 +66,7 @@ public sealed class MainViewModel : ObservableObject
         _store = store ?? new JsonDataStore();
         _backupService = new BackupService(_store.DataFilePath);
         _data = _store.Load();
-        MigrateEventsToTasks();
+        MigrateAndNormalizeData();
         RefreshFolders();
         RebuildTaskTags();
         RefreshEvents();
@@ -714,9 +714,9 @@ public sealed class MainViewModel : ObservableObject
         RaisePropertyChanged(nameof(InvalidFolderCount));
     }
 
-    private void MigrateEventsToTasks()
+    private void MigrateAndNormalizeData()
     {
-        var changed = _data.Events.RemoveAll(x => x.IsSystemLog) > 0 || _data.SchemaVersion < 9;
+        var changed = _data.Events.RemoveAll(x => x.IsSystemLog) > 0 || _data.SchemaVersion < 10;
         _data.GitHubTrendSnapshots ??= [];
         _data.Commands ??= [];
         _data.QuickFilters ??= [];
@@ -745,6 +745,17 @@ public sealed class MainViewModel : ObservableObject
         if (!GitHubLanguages.Contains(_data.Settings.GitHubTrendLanguage)) { _data.Settings.GitHubTrendLanguage = "全部语言"; changed = true; }
         if (_data.Settings.FileSharePort is < 1024 or > 65535) { _data.Settings.FileSharePort = 5080; changed = true; }
         if (string.IsNullOrWhiteSpace(_data.Settings.FileSharePassword)) { _data.Settings.FileSharePassword = "change-me-now"; changed = true; }
+        if (!GlobalHotkeyService.TryNormalizeGesture(_data.Settings.ShowWindowHotkey, out var normalizedHotkey, out _))
+        {
+            _data.Settings.EnableShowWindowHotkey = false;
+            _data.Settings.ShowWindowHotkey = "Ctrl + Alt + J";
+            changed = true;
+        }
+        else if (_data.Settings.ShowWindowHotkey != normalizedHotkey)
+        {
+            _data.Settings.ShowWindowHotkey = normalizedHotkey;
+            changed = true;
+        }
         foreach (var task in _data.Events)
         {
             task.SubTasks ??= [];
@@ -757,7 +768,7 @@ public sealed class MainViewModel : ObservableObject
                 changed = true;
             }
         }
-        if (_data.SchemaVersion < 9) _data.SchemaVersion = 9;
+        if (_data.SchemaVersion < 10) _data.SchemaVersion = 10;
         if (changed) _store.Save(_data);
     }
 
